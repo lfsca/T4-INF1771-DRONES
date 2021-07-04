@@ -31,7 +31,7 @@ import datetime
 # </summary>
 class Bot():
 
-    name = "INF1771 Bot Example1" # BOT NAME
+    name = "Nattanzinho Carpinteiro" # BOT NAME
     host = "atari.icad.puc-rio.br" # SERVER
 
     client = None
@@ -39,7 +39,7 @@ class Bot():
     timer1 = None
     
     running = True
-    thread_interval = 1 # USE BETWEEN 0.1 and 1 (0.1 real setting, 1 debug settings and makes the bot slower)
+    thread_interval = 0.1 # USE BETWEEN 0.1 and 1 (0.1 real setting, 1 debug settings and makes the bot slower)
 
     playerList = {} #new Dictionary<long, PlayerInfo>
     shotList = [] #new List<ShotInfo>
@@ -357,7 +357,7 @@ class Bot():
 
             print("Connected")
             self.client.sendName(self.name)
-            #self.client.sendRGB(255,0,0)  # BOT COLOR
+            self.client.sendRGB(0,255,0)  # BOT COLOR
             self.client.sendRequestGameStatus()
             self.client.sendRequestUserStatus()
             self.client.sendRequestObservation()
