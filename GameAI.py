@@ -373,7 +373,7 @@ class GameAI():
             self.current_state = "grab"
             self.StateGrab()
 
-        # analogamente, se passar por cima de poção e n tiver com vida cheia, sipa vale a pena tb
+        # analogamente, se passar por cima de poção e n tiver com vida cheia, acho que vale tb
         elif self.current_observations["redLight"] and self.energy < 80:
             self.current_state = "grab"
             self.StateGrab()
