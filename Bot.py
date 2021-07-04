@@ -324,6 +324,8 @@ class Bot():
         self.client.sendRequestGameStatus()
         if self.gameStatus == "Game":
             self.DoDecision()
+            if self.msgSeconds == 1000:
+                print("Sou noob, tenham pena de mim")
 
         elif self.msgSeconds >= 5000: # 5 SECONDS
 
@@ -357,7 +359,7 @@ class Bot():
 
             print("Connected")
             self.client.sendName(self.name)
-            self.client.sendRGB(0,255,0)  # BOT COLOR
+            self.client.sendRGB(255,128,0)  # BOT COLOR
             self.client.sendRequestGameStatus()
             self.client.sendRequestUserStatus()
             self.client.sendRequestObservation()
