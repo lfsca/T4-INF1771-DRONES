@@ -230,6 +230,9 @@ class GameAI():
         self.player.x = x
         self.player.y = y
 
+    def SetPlayerDirection(self, direcao):
+        """ Função auxiliar"""
+        self.dir = direcao
     
 
     # <summary>
@@ -299,17 +302,33 @@ class GameAI():
     def StateGrab(self):
         self.current_action = "pegar_ouro"
 
-
     def StateEscape(self):
         # TODO: implementar isso na moral
-        n = random.randint(0,7)
-        if n == 0:
-            self.current_action = "virar_direita"
-        elif n == 1:
-            self.current_action = "virar_esquerda"
-        else:
-            self.current_action = "andar"
+        pos = self.GetPlayerPosition()
 
+        if self.dir == "north":
+            self.SetPlayerDirection("west")
+            self.current_action = "virar_esquerda"
+            self.SetPlayerPosition(pos.x - 1, pos.y)
+            self.current_action = "andar"
+                
+        elif self.dir == "east":
+            self.SetPlayerDirection("south")
+            self.current_action = "virar_esquerda"
+            self.SetPlayerPosition(pos.x, pos.y + 1)
+            self.current_action = "andar"
+                
+        elif self.dir == "south":
+            self.SetPlayerDirection("east")
+            self.current_action = "virar_esquerda"
+            self.SetPlayerPosition(pos.x + 1, pos.y)
+            self.current_action = "andar"
+                
+        elif self.dir == "west":
+            self.SetPlayerDirection("north")
+            self.current_action = "virar_esquerda"
+            self.SetPlayerPosition(pos.x, pos.y - 1)
+            self.current_action = "andar"
 
     def StateAttack(self):
         self.current_action = "atacar"
@@ -522,7 +541,7 @@ class GameAI():
                     if custo is None:
                         custo = 10000  # ginasio nulo, que nao da para passar
                 else:
-                    custo = Campo.CUSTO[tipo]
+                    custo = self.campo.CUSTO[tipo]
                 
                 possivel_novo_gScore = gScore[pos_atual] + custo
                 if possivel_novo_gScore < gScore[vizinho]:
