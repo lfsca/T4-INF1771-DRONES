@@ -84,6 +84,10 @@ class GameAI():
                 hit             => acertou tiro
                 enemy_in_front  => tem um inimigo a até 10 passos na direção para onde está apontando
                 }
+            
+        map: lista de listas 59 x 34, cada posição é um caractere. Inicialmente tudo "#", que significa
+            pos. desconhecida (pode trocar o simbolo). Pensei em fazer caracteres para cada tipo de 
+            posição diferente, por ex. "O" sendo ouro, "." sendo posição descoberta sem item, etc.
 
     """
     
@@ -119,6 +123,9 @@ class GameAI():
                             "hit": False,
                             "enemy_in_front": False
     }
+
+    # inicializa mapa com todas posições "#", indicando desconhecido.
+    map = [["#"] * 34 for _ in range(59)]
 
     # <summary>
     # Refresh player status
@@ -362,6 +369,13 @@ class GameAI():
         pass
 
 
+    def print_map(self):
+        for a in range(34):
+            for b in self.map:
+                print (b[a], end = "")
+            print("")
+        print("")
+
     def DecideState(self):
         """ Máquina de estados. É chamada a cada jogada para decidir qual deve ser o estado atual
         e chamar a função correspondente, que determinará qual ação será tomada. Dá pra melhorar
@@ -410,7 +424,8 @@ class GameAI():
         # se tem inimigo na frente & a vida ta razoavelmente alta & se última ação não
         # tiver sido um tiro que errou, atira. Isso do tiro que errou é pra tentar evitar
         # de ficar atirando na parede se tiver inimigo atrás dela, mas não sei se é uma boa,
-        # tem que testar
+        # tem que testar. Talvez seja melhor fazer tipo, se últimas 5 ações tiverem sido tiros
+        # errados em vez de só checar a última
         elif (self.current_observations["enemy_in_front"] and self.energy > 50 and
               not (self.past_state == "attack" and not self.current_observations["hit"])):
             self.current_state = "attack"
@@ -433,6 +448,10 @@ class GameAI():
         """ Essa é a função que faz o "meio-campo" todo. Ela é chamada pelo
         Bot.py a cada 0.1s e deve informar qual deve ser a próxima ação a ser tomada.
         """
+        
+        # printa mapa na tela a cada 300 ações
+        if self.number_of_moves % 300 == 0:
+            self.print_map()
 
         self.number_of_moves += 1
         self.UpdateMap()
