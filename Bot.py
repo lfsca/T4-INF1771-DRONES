@@ -18,6 +18,7 @@ __version__ = "1.0.0"
 __email__ = "abaffa@inf.puc-rio.br"
 #############################################################
 
+import random
 from threading import Timer
 from GameAI import GameAI
 import Socket.HandleClient
@@ -305,10 +306,13 @@ class Bot():
         elif decision ==  "atacar":
             self.client.sendShoot()
         elif decision ==  "pegar_ouro":
+            self.sendMsg("TAMBEM SEM DINHEIROOO!!!")
             self.client.sendGetItem()
         elif decision == "pegar_anel":
+            self.sendMsg("TAMBEM SEM DINHEIROOO!!!")
             self.client.sendGetItem()
         elif decision == "pegar_powerup":
+            self.sendMsg("AMAVA A PRINCESAAAA!!!")
             self.client.sendGetItem()
         elif decision ==  "andar_re":
             self.client.sendBackward()
@@ -324,8 +328,10 @@ class Bot():
         self.client.sendRequestGameStatus()
         if self.gameStatus == "Game":
             self.DoDecision()
-            if self.msgSeconds == 1000:
-                print("Sou noob, tenham pena de mim")
+            if self.msgSeconds == 5000:
+                self.sendMsg("UM CONTO DE FADAAAAAAS!!!")
+
+                    
 
         elif self.msgSeconds >= 5000: # 5 SECONDS
 

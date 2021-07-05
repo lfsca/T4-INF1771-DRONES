@@ -374,6 +374,15 @@ class GameAI():
             self.current_action = "virar_esquerda"
         else:
             self.current_action = "andar"
+    
+    def CheckNotWall(self,x,y):
+        
+        if x>58 or x<0 or y<0 or y>33:
+            return False
+
+        return True
+
+
 
 
     def UpdateMap(self):
@@ -385,6 +394,71 @@ class GameAI():
         # você está em uma posição e não está sentindo cheirinho de buraco nem tp, você pode marcar as
         # posições adjacentes como "seguras", mesmo sem saber o que são exatamente (mas vc sabe q pelo
         # menos não são buraco nem tp)
+
+        posicao_player = self.GetPlayerPosition()
+
+        if self.current_observations["blueLight"]:
+            self.map[posicao_player.x][posicao_player.y] = "T"
+        
+        elif self.current_observations["redLight"]:
+            self.map[posicao_player.x][posicao_player.y] = "L"
+        
+        if self.current_observations["breeze"] or self.current_observations["flash"]:
+            if self.dir == "north":
+                if self.CheckNotWall(posicao_player.x-1,posicao_player.y):
+                    self.map[posicao_player.x-1][posicao_player.y] = "!"
+                if self.CheckNotWall(posicao_player.x+1,posicao_player.y):
+                    self.map[posicao_player.x+1][posicao_player.y] = "!"
+                if self.CheckNotWall(posicao_player.x,posicao_player.y+1):
+                    self.map[posicao_player.x][posicao_player.y+1] = "!"
+            elif self.dir == "south":
+                if self.CheckNotWall(posicao_player.x-1,posicao_player.y):
+                    self.map[posicao_player.x-1][posicao_player.y] = "!"
+                if self.CheckNotWall(posicao_player.x+1,posicao_player.y):
+                    self.map[posicao_player.x+1][posicao_player.y] = "!"
+                if self.CheckNotWall(posicao_player.x,posicao_player.y-1):
+                    self.map[posicao_player.x][posicao_player.y-1] = "!"
+            elif self.dir == "east":
+                if self.CheckNotWall(posicao_player.x,posicao_player.y+1):
+                    self.map[posicao_player.x][posicao_player.y+1] = "!"
+                if self.CheckNotWall(posicao_player.x,posicao_player.y-1):
+                    self.map[posicao_player.x][posicao_player.y-1] = "!"
+                if self.CheckNotWall(posicao_player.x+1,posicao_player.y):
+                    self.map[posicao_player.x+1][posicao_player.y] = "!"
+            elif self.dir == "west":
+                if self.CheckNotWall(posicao_player.x,posicao_player.y+1):
+                    self.map[posicao_player.x][posicao_player.y+1] = "!"
+                if self.CheckNotWall(posicao_player.x,posicao_player.y-1):
+                    self.map[posicao_player.x][posicao_player.y-1] = "!"
+                if self.CheckNotWall(posicao_player.x-1,posicao_player.y):
+                    self.map[posicao_player.x-1][posicao_player.y] = "!"
+        else:
+            if self.CheckNotWall(posicao_player.x-1,posicao_player.y) and self.map[posicao_player.x-1][posicao_player.y] == "!":
+                self.map[posicao_player.x-1][posicao_player.y] = "?"
+            if self.CheckNotWall(posicao_player.x+1,posicao_player.y) and self.map[posicao_player.x+1][posicao_player.y] == "!":
+                self.map[posicao_player.x+1][posicao_player.y] = "?"
+            if self.CheckNotWall(posicao_player.x,posicao_player.y+1) and self.map[posicao_player.x][posicao_player.y+1] == "!":
+                self.map[posicao_player.x][posicao_player.y+1] = "?"
+            if self.CheckNotWall(posicao_player.x,posicao_player.y-1) and self.map[posicao_player.x][posicao_player.y-1] == "!":
+                self.map[posicao_player.x][posicao_player.y-1] = "?"
+
+        if self.current_observations["blocked"]:
+            if self.dir == "north":
+                if self.CheckNotWall(posicao_player.x,posicao_player.y+1):
+                    self.map[posicao_player.x][posicao_player.y+1] = "W"
+            if self.dir == "south":
+                if self.CheckNotWall(posicao_player.x,posicao_player.y-1):
+                    self.map[posicao_player.x][posicao_player.y-1] = "W"
+            if self.dir == "east":
+                if self.CheckNotWall(posicao_player.x+1,posicao_player.y):
+                    self.map[posicao_player.x+1][posicao_player.y] = "W"
+            if self.dir == "west":
+                if self.CheckNotWall(posicao_player.x-1,posicao_player.y):
+                    self.map[posicao_player.x-1][posicao_player.y] = "W"
+
+        if self.map[posicao_player.x][posicao_player.y] == "#":
+            self.map[posicao_player.x][posicao_player.y] = "."
+
         pass
 
 
@@ -467,9 +541,9 @@ class GameAI():
         """ Essa é a função que faz o "meio-campo" todo. Ela é chamada pelo
         Bot.py a cada 0.1s e deve informar qual deve ser a próxima ação a ser tomada.
         """
-        
+
         # printa mapa na tela a cada 300 ações
-        if self.number_of_moves % 300 == 0:
+        if self.number_of_moves % 200 == 0:
             self.print_map()
 
         self.number_of_moves += 1
