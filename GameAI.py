@@ -86,9 +86,14 @@ class GameAI():
                 }
             
         map: lista de listas 59 x 34, cada posição é um caractere. Inicialmente tudo "#", que significa
-            pos. desconhecida (pode trocar o simbolo). Pensei em fazer caracteres para cada tipo de 
-            posição diferente, por ex. "O" sendo ouro, "." sendo posição descoberta sem item, etc.
-
+            pos. desconhecida. Cada tipo de posição diferente tem o seu caractere, abaixo a lista:
+            "#" => Posição totalmente desconhecida
+            "." => Posição já descoberta sem nenhum item
+            "!" => Possível buraco ou tp, são posições a serem evitadas
+            "?" => Posição desconhecida, porém segura. Não sabemos o q tem nela mas podemos ir pra ela sem problema
+            "T" => Posição onde spawna ouro.
+            "L" => Posição onde spawna poção de vida
+            "W" => Parede
     """
     
     player = Position()
@@ -127,16 +132,25 @@ class GameAI():
     # inicializa mapa com todas posições "#", indicando desconhecido.
     map = [["#"] * 34 for _ in range(59)]
 
-    # <summary>
-    # Refresh player status
-    # </summary>
-    # <param name="x">player position x</param>
-    # <param name="y">player position y</param>
-    # <param name="dir">player direction</param>
-    # <param name="state">player state</param>
-    # <param name="score">player score</param>
-    # <param name="energy">player energy</param>
+
+
+    ###########################################################################
+    #
+    # Funções que não são chamadas por outras funções deste arquivo
+    #
+    ###########################################################################
+
     def SetStatus(self, x, y, dir, state, score, energy):
+        """ NÃO MEXER!!! Atualiza status do jogador.
+        
+        Args:
+            x: player position x
+            y: player position y
+            dir: player direction
+            state: player state
+            score: player score
+            energy: player energy
+        """
     
         self.player.x = x
         self.player.y = y
@@ -148,100 +162,23 @@ class GameAI():
 
 
     # <summary>
-    # Get list of observable adjacent positions
-    # </summary>
-    # <returns>List of observable adjacent positions</returns>
-    def GetObservableAdjacentPositions(self):
-        """ Função auxiliar"""
-
-        ret = []
-
-        ret.append(Position(self.player.x - 1, self.player.y))
-        ret.append(Position(self.player.x + 1, self.player.y))
-        ret.append(Position(self.player.x, self.player.y - 1))
-        ret.append(Position(self.player.x, self.player.y + 1))
-
-        return ret
-
-
-    # <summary>
-    # Get list of all adjacent positions (including diagonal)
-    # </summary>
-    # <returns>List of all adjacent positions (including diagonal)</returns>
-    def GetAllAdjacentPositions(self):
-        """ Função auxiliar"""
-
-        ret = []
-
-        ret.Add(Position(self.player.x - 1, self.player.y - 1))
-        ret.Add(Position(self.player.x, self.player.y - 1))
-        ret.Add(Position(self.player.x + 1, self.player.y - 1))
-
-        ret.Add(Position(self.player.x - 1, self.player.y))
-        ret.Add(Position(self.player.x + 1, self.player.y))
-
-        ret.Add(Position(self.player.x - 1, self.player.y + 1))
-        ret.Add(Position(self.player.x, self.player.y + 1))
-        ret.Add(Position(self.player.x + 1, self.player.y + 1))
-
-        return ret
-    
-
-    # <summary>
-    # Get next forward position
-    # </summary>
-    # <returns>next forward position</returns>
-    def NextPosition(self):
-        """ Função auxiliar"""
-
-        ret = None
-        
-        if self.dir == "north":
-            ret = Position(self.player.x, self.player.y - 1)
-                
-        elif self.dir == "east":
-                ret = Position(self.player.x + 1, self.player.y)
-                
-        elif self.dir == "south":
-                ret = Position(self.player.x, self.player.y + 1)
-                
-        elif self.dir == "west":
-                ret = Position(self.player.x - 1, self.player.y)
-
-        return ret
-    
-
-    # <summary>
-    # Player position
-    # </summary>
-    # <returns>player position</returns>
-    def GetPlayerPosition(self):
-        """ Função auxiliar"""
-        return self.player
-
-
-    # <summary>
     # Set player position
     # </summary>
     # <param name="x">x position</param>
     # <param name="y">y position</param>
     def SetPlayerPosition(self, x, y):
-        """ Função auxiliar"""
+        """ NÃO USAR ESTA FUNÇÃO!!! Não é por aqui que muda a posição de verdade"""
         self.player.x = x
         self.player.y = y
 
-    def SetPlayerDirection(self, direcao):
-        """ Função auxiliar"""
-        self.dir = direcao
-    
 
-    # <summary>
-    # Observations received
-    # </summary>
-    # <param name="o">list of observations</param>
     def GetObservations(self, o):
-        """ Função chamada pelo Bot.py para atualizar as observações a cada jogada.
-            Só é chamada se algo foi observado.
+        """ NÃO CHAMAR ESTA FUNÇÃO!!!
+        Função chamada pelo Bot.py para atualizar as observações a cada jogada. 
+        Só é chamada se algo foi observado.
+
+        Args:
+            o: lista de observações
         """
         
         possible_observations = [
@@ -270,13 +207,11 @@ class GameAI():
                 self.current_observations[possible_obs] = False
 
 
-    # <summary>
-    # No observations received
-    # </summary>
     def GetObservationsClean(self):
-        """ Função praticamente igual à anterior, mas indica que não há
-            nada a ser observado no momento (pq a posição atual não tem nada
-            e não tem buraco, teletransporte nem inimigo ao redor)
+        """ NÃO CHAMAR ESTA FUNÇÃO!!!
+            Função praticamente igual à anterior, mas indica que nada foi
+            observado no momento (pq a posição atual não tem nada
+            e também não tem buraco, teletransporte nem inimigo ao redor).
         """
 
         possible_observations = [
@@ -296,6 +231,225 @@ class GameAI():
             self.current_observations[possible_obs] = False
 
 
+    ###########################################################################
+    #
+    # Funções auxiliares internas
+    #
+    ###########################################################################
+
+
+    def GetObservableAdjacentPositions(self):
+        """ Função auxiliar. Retorna lista de posições adjacentes existentes.
+        Faz o check para ver se posições realmente existem.
+        
+        Returns:
+            Lista de objetos Position correspondentes 
+        """
+
+        ret = []
+
+        if self.CheckNotWall(self.player.x - 1, self.player.y):
+            ret.append(Position(self.player.x - 1, self.player.y))
+        if self.CheckNotWall(self.player.x + 1, self.player.y):
+            ret.append(Position(self.player.x + 1, self.player.y))
+        if self.CheckNotWall(self.player.x, self.player.y - 1):
+            ret.append(Position(self.player.x, self.player.y - 1))
+        if self.CheckNotWall(self.player.x, self.player.y + 1):
+            ret.append(Position(self.player.x, self.player.y + 1))
+
+        return ret
+
+
+    def GetAllAdjacentPositions(self):
+        """ Função auxiliar. Retorna lista de posições adjacentes (incluindo diagonais) existentes
+        
+        Returns:
+            Lista de objetos Position correspondentes 
+        """
+
+        ret = []
+
+        if self.CheckNotWall(self.player.x - 1, self.player.y - 1):
+            ret.Add(Position(self.player.x - 1, self.player.y - 1))
+        if self.CheckNotWall(self.player.x, self.player.y - 1):
+            ret.Add(Position(self.player.x, self.player.y - 1))
+        if self.CheckNotWall(self.player.x + 1, self.player.y - 1):
+            ret.Add(Position(self.player.x + 1, self.player.y - 1))
+
+        if self.CheckNotWall(self.player.x - 1, self.player.y):
+            ret.Add(Position(self.player.x - 1, self.player.y))
+        if self.CheckNotWall(self.player.x + 1, self.player.y):
+            ret.Add(Position(self.player.x + 1, self.player.y))
+
+        if self.CheckNotWall(self.player.x - 1, self.player.y + 1):
+            ret.Add(Position(self.player.x - 1, self.player.y + 1))
+        if self.CheckNotWall(self.player.x, self.player.y + 1):
+            ret.Add(Position(self.player.x, self.player.y + 1))
+        if self.CheckNotWall(self.player.x + 1, self.player.y + 1):    
+            ret.Add(Position(self.player.x + 1, self.player.y + 1))
+
+        return ret
+    
+
+    def GetPositionTurningRight(self):
+        """ Função auxiliar. Retorna posição à direita (em relação a onde o bote ta olhando).
+        Caso não haja posição à sua direita (por ser fora do mapa), retorna None
+        
+        Returns:
+            objeto Position correspondente
+            None se posição não existir
+        """
+
+        ret = None
+
+        if self.dir == "north" and self.CheckNotWall(self.player.x + 1, self.player.y):
+            ret = Position(self.player.x + 1, self.player.y)      
+        elif self.dir == "east" and self.CheckNotWall(self.player.x, self.player.y + 1):
+                ret = Position(self.player.x, self.player.y + 1)     
+        elif self.dir == "south" and self.CheckNotWall(self.player.x - 1, self.player.y):
+                ret = Position(self.player.x - 1, self.player.y)    
+        elif self.dir == "west" and self.CheckNotWall(self.player.x, self.player.y - 1):
+                ret = Position(self.player.x, self.player.y - 1)
+
+        return ret
+
+
+    def GetPositionTurningLeft(self):
+        """ Função auxiliar. Retorna posição à esquerda (em relação a onde o bote ta olhando).
+        Caso não haja posição à sua esquerda (por ser fora do mapa), retorna None
+        
+        Returns:
+            objeto Position correspondente
+            None se posição não existir
+        """
+
+        ret = None
+
+        if self.dir == "north" and self.CheckNotWall(self.player.x - 1, self.player.y):
+            ret = Position(self.player.x - 1, self.player.y)      
+        elif self.dir == "east" and self.CheckNotWall(self.player.x, self.player.y - 1):
+                ret = Position(self.player.x, self.player.y - 1)     
+        elif self.dir == "south" and self.CheckNotWall(self.player.x + 1, self.player.y):
+                ret = Position(self.player.x + 1, self.player.y)    
+        elif self.dir == "west" and self.CheckNotWall(self.player.x, self.player.y + 1):
+                ret = Position(self.player.x, self.player.y + 1)
+
+        return ret
+
+
+    def GetPositionBehind(self):
+        """ Função auxiliar. Retorna posição de trás (em relação a onde o bote ta olhando).
+        Caso não haja posição atrás (por ser fora do mapa), retorna None
+        
+        Returns:
+            objeto Position correspondente
+            None se posição não existir
+        """
+
+        ret = None
+
+        if self.dir == "north" and self.CheckNotWall(self.player.x, self.player.y + 1):
+            ret = Position(self.player.x, self.player.y + 1)      
+        elif self.dir == "east" and self.CheckNotWall(self.player.x - 1, self.player.y):
+                ret = Position(self.player.x - 1, self.player.y)     
+        elif self.dir == "south" and self.CheckNotWall(self.player.x, self.player.y - 1):
+                ret = Position(self.player.x, self.player.y - 1)    
+        elif self.dir == "west" and self.CheckNotWall(self.player.x + 1, self.player.y):
+                ret = Position(self.player.x + 1, self.player.y)
+
+        return ret
+    
+    
+    def GetPositionForward(self):
+        """ Função auxiliar. Retorna posição em frente. Caso não haja posição a frente, retorna None.
+
+        Returns:
+            objeto Position correspondente
+            None se posição não existir
+        """
+
+        ret = None
+        
+        if self.dir == "north" and self.CheckNotWall(self.player.x, self.player.y - 1):
+            ret = Position(self.player.x, self.player.y - 1)      
+        elif self.dir == "east" and self.CheckNotWall(self.player.x + 1, self.player.y):
+            ret = Position(self.player.x + 1, self.player.y)     
+        elif self.dir == "south" and self.CheckNotWall(self.player.x, self.player.y + 1):
+            ret = Position(self.player.x, self.player.y + 1)    
+        elif self.dir == "west" and self.CheckNotWall(self.player.x - 1, self.player.y):
+            ret = Position(self.player.x - 1, self.player.y)
+
+        return ret
+    
+
+    def GetPlayerPosition(self):
+        """ Função auxiliar. Retorna posição atual do jogador
+        
+        Returns: objeto player, da classe Position
+
+        """
+        return self.player
+
+
+    def CheckNotWall(self,x,y):
+        """ Função auxiliar. Verifica se pos. fornecida não está fora do mapa
+        
+            Args:
+                x: x da posição a ser verificada
+                y: y da posição a ser verificada
+            Returns:
+                Bool, True se posição está dentro do mapa
+        """
+        
+        if x>58 or x<0 or y<0 or y>33:
+            return False
+        return True
+
+
+    def print_map(self):
+        """ Função auxiliar. Printa mapa no terminal"""
+        for a in range(34):
+            for b in self.map:
+                print (b[a], end = "")
+            print("")
+        print("")
+
+
+    def manhattan(self, x1, y1, x2, y2):
+        """ Função auxiliar. Retorna dist de manhattan entre dois pontos.
+        """
+        return abs(x1 - x2) + abs(y1 - y2)
+
+    def find_nearest_gold(self):
+        """ Função auxiliar. Retorna posição (no formato de lista [x,y]) do ouro mais próximo do bot.
+
+        Não está sendo usado na moral, fiz mais pra testar se funcionava isso. Pode ser meio um precursor
+        do a*
+        """
+        golds_positions = []
+        for y in range(34):
+            for x in range(59):
+                if self.map[x][y] == "T":
+                    golds_positions.append([x,y])
+        nearest_gold = None
+        min_distance = 1000000
+        current_x = self.GetPlayerPosition().x
+        current_y = self.GetPlayerPosition().y
+        for gold_position in golds_positions:
+            dist_to_gold = self.manhattan(gold_position[0], gold_position[1], current_x, current_y)
+            if  dist_to_gold < min_distance:
+                nearest_gold = gold_position
+                min_distance = dist_to_gold
+        return nearest_gold
+
+
+    ###########################################################################
+    #
+    # Funções de estado
+    #
+    ###########################################################################
+
+
     # aqui começam as funções de cada estado. Os estados devem decidir qual a próxima
     # ação que deve ser tomada e alterar a variável self.current_action de acordo
 
@@ -303,32 +457,46 @@ class GameAI():
         self.current_action = "pegar_ouro"
 
     def StateEscape(self):
-        # TODO: implementar isso na moral
-        pos = self.GetPlayerPosition()
 
-        if self.dir == "north":
-            self.SetPlayerDirection("west")
-            self.current_action = "virar_esquerda"
-            self.SetPlayerPosition(pos.x - 1, pos.y)
-            self.current_action = "andar"
+        # esse jeito que tava sendo feito tava bugando a posição do jogador,
+        # porque a gnt não pode usar o setPlayerPosition nem o setPlayerDirection
+        # pra mudar a posição do jogador. Isso tem que ser feito uma ação por
+        # vez, usando o self.current_action = <ação>. Comentei em volta dele e
+        # coloquei uma função random pra poder testar outras coisas.
+
+        # pos = self.GetPlayerPosition()
+
+        # if self.dir == "north":
+        #     self.SetPlayerDirection("west")
+        #     self.current_action = "virar_esquerda"
+        #     self.SetPlayerPosition(pos.x - 1, pos.y)
+        #     self.current_action = "andar"
                 
-        elif self.dir == "east":
-            self.SetPlayerDirection("south")
-            self.current_action = "virar_esquerda"
-            self.SetPlayerPosition(pos.x, pos.y + 1)
-            self.current_action = "andar"
+        # elif self.dir == "east":
+        #     self.SetPlayerDirection("south")
+        #     self.current_action = "virar_esquerda"
+        #     self.SetPlayerPosition(pos.x, pos.y + 1)
+        #     self.current_action = "andar"
                 
-        elif self.dir == "south":
-            self.SetPlayerDirection("east")
-            self.current_action = "virar_esquerda"
-            self.SetPlayerPosition(pos.x + 1, pos.y)
-            self.current_action = "andar"
+        # elif self.dir == "south":
+        #     self.SetPlayerDirection("east")
+        #     self.current_action = "virar_esquerda"
+        #     self.SetPlayerPosition(pos.x + 1, pos.y)
+        #     self.current_action = "andar"
                 
-        elif self.dir == "west":
-            self.SetPlayerDirection("north")
+        # elif self.dir == "west":
+        #     self.SetPlayerDirection("north")
+        #     self.current_action = "virar_esquerda"
+        #     self.SetPlayerPosition(pos.x, pos.y - 1)
+        #     self.current_action = "andar"
+        n = random.randint(0,7)
+        if n == 0:
+            self.current_action = "virar_direita"
+        elif n == 1:
             self.current_action = "virar_esquerda"
-            self.SetPlayerPosition(pos.x, pos.y - 1)
+        else:
             self.current_action = "andar"
+
 
     def StateAttack(self):
         self.current_action = "atacar"
@@ -347,6 +515,7 @@ class GameAI():
 
     def StateSearchGold(self):
         # TODO: implementar isso na moral, usando a* para chegar no ouro mais próximo
+        print(self.find_nearest_gold())
         n = random.randint(0,7)
         if n == 0:
             self.current_action = "virar_direita"
@@ -357,14 +526,51 @@ class GameAI():
 
 
     def StateRandomExplore(self):
-        # TODO: implementar isso melhor, pelo menos evitar de ir para posições já visitadas
-        n = random.randint(0,7)
-        if n == 0:
-            self.current_action = "virar_direita"
-        elif n == 1:
-            self.current_action = "virar_esquerda"
-        else:
+
+
+        # Basicamente, a lógica que usei nessa função foi a seguinte: na fase de explorar,
+        # é melhor dar prioridade para ir para posições ainda desconhecidas (ou seja,
+        # marcadas com "?"). E também, é melhor ir pra frente do que virar e ir para
+        # outro lado porque indo para frente você gasta apenas uma ação, e não duas.
+        # se a da frente já é conhecida, vê as duas do lado. para ficar equilibrado,
+        # faço um sorteio para ver se a esquerda terá prioridade sobre a direita dessa vez
+        
+        forward_position = self.GetPositionForward()
+        if forward_position:
+            forward_position_char = self.map[forward_position.x][forward_position.y]
+        turning_left_position = self.GetPositionTurningLeft()
+        if turning_left_position:
+            turning_left_position_char = self.map[turning_left_position.x][turning_left_position.y]
+        turning_right_position = self.GetPositionTurningRight()
+        if turning_right_position:
+            turning_right_position_char = self.map[turning_right_position.x][turning_right_position.y]
+        
+        random_decider = random.randint(0,1)
+        if forward_position and forward_position_char == "?":
             self.current_action = "andar"
+
+        elif random_decider == 0:
+            if turning_left_position and turning_left_position_char == "?":
+                self.current_action = "virar_esquerda"
+            elif turning_right_position and turning_right_position_char == "?":
+                self.current_action = "virar_direita"
+            elif forward_position and forward_position_char != "W":
+                self.current_action = "andar"
+            elif turning_left_position and turning_left_position_char != "W":
+                self.current_action = "virar_esquerda"
+            else:
+                self.current_action = "virar_direita"
+        else:
+            if turning_right_position and turning_right_position_char == "?":
+                self.current_action = "virar_direita"
+            elif turning_left_position and turning_left_position_char == "?":
+                self.current_action = "virar_esquerda"
+            elif forward_position and forward_position_char != "W":
+                self.current_action = "andar"
+            elif turning_right_position and turning_right_position_char != "W":
+                self.current_action = "virar_direita"
+            else:
+                self.current_action = "virar_esquerda"
 
 
     def StateAvoidHole(self):
@@ -374,26 +580,18 @@ class GameAI():
             self.current_action = "virar_esquerda"
         else:
             self.current_action = "andar"
-    
-    def CheckNotWall(self,x,y):
-        
-        if x>58 or x<0 or y<0 or y>33:
-            return False
-
-        return True
 
 
+    ###########################################################################
+    #
+    # Funções principais
+    #
+    ###########################################################################
 
 
     def UpdateMap(self):
-        # TODO: essa função aqui eu pensei para ser chamada no início de cada jogada, para atualizar
-        # o mapa (que ainda não implementamos) com o conteudo da posição atual e marcando as posições 
-        # adjacentes como perigosas se tiver algum "cheirinho" (de buraco ou tp) e também marcando se for
-        # parede. Pensei em marcar no mapa posições q são possíveis buracos com um ! ou algo assim para
-        # indicar que são posições possivelmente perigosas e que devem ser evitadas. Pensei também que, se
-        # você está em uma posição e não está sentindo cheirinho de buraco nem tp, você pode marcar as
-        # posições adjacentes como "seguras", mesmo sem saber o que são exatamente (mas vc sabe q pelo
-        # menos não são buraco nem tp)
+        """ Atualiza o mapa a cada jogada com as informações disponíveis no momento.
+        """
 
         posicao_player = self.GetPlayerPosition()
 
@@ -404,70 +602,24 @@ class GameAI():
             self.map[posicao_player.x][posicao_player.y] = "L"
         
         if self.current_observations["breeze"] or self.current_observations["flash"]:
-            if self.dir == "north":
-                if self.CheckNotWall(posicao_player.x-1,posicao_player.y):
-                    self.map[posicao_player.x-1][posicao_player.y] = "!"
-                if self.CheckNotWall(posicao_player.x+1,posicao_player.y):
-                    self.map[posicao_player.x+1][posicao_player.y] = "!"
-                if self.CheckNotWall(posicao_player.x,posicao_player.y+1):
-                    self.map[posicao_player.x][posicao_player.y+1] = "!"
-            elif self.dir == "south":
-                if self.CheckNotWall(posicao_player.x-1,posicao_player.y):
-                    self.map[posicao_player.x-1][posicao_player.y] = "!"
-                if self.CheckNotWall(posicao_player.x+1,posicao_player.y):
-                    self.map[posicao_player.x+1][posicao_player.y] = "!"
-                if self.CheckNotWall(posicao_player.x,posicao_player.y-1):
-                    self.map[posicao_player.x][posicao_player.y-1] = "!"
-            elif self.dir == "east":
-                if self.CheckNotWall(posicao_player.x,posicao_player.y+1):
-                    self.map[posicao_player.x][posicao_player.y+1] = "!"
-                if self.CheckNotWall(posicao_player.x,posicao_player.y-1):
-                    self.map[posicao_player.x][posicao_player.y-1] = "!"
-                if self.CheckNotWall(posicao_player.x+1,posicao_player.y):
-                    self.map[posicao_player.x+1][posicao_player.y] = "!"
-            elif self.dir == "west":
-                if self.CheckNotWall(posicao_player.x,posicao_player.y+1):
-                    self.map[posicao_player.x][posicao_player.y+1] = "!"
-                if self.CheckNotWall(posicao_player.x,posicao_player.y-1):
-                    self.map[posicao_player.x][posicao_player.y-1] = "!"
-                if self.CheckNotWall(posicao_player.x-1,posicao_player.y):
-                    self.map[posicao_player.x-1][posicao_player.y] = "!"
+            for adjacent_position in self.GetObservableAdjacentPositions():
+                if self.map[adjacent_position.x][adjacent_position.y] == "#":
+                    self.map[adjacent_position.x][adjacent_position.y] = "!"
         else:
-            if self.CheckNotWall(posicao_player.x-1,posicao_player.y) and self.map[posicao_player.x-1][posicao_player.y] == "!":
-                self.map[posicao_player.x-1][posicao_player.y] = "?"
-            if self.CheckNotWall(posicao_player.x+1,posicao_player.y) and self.map[posicao_player.x+1][posicao_player.y] == "!":
-                self.map[posicao_player.x+1][posicao_player.y] = "?"
-            if self.CheckNotWall(posicao_player.x,posicao_player.y+1) and self.map[posicao_player.x][posicao_player.y+1] == "!":
-                self.map[posicao_player.x][posicao_player.y+1] = "?"
-            if self.CheckNotWall(posicao_player.x,posicao_player.y-1) and self.map[posicao_player.x][posicao_player.y-1] == "!":
-                self.map[posicao_player.x][posicao_player.y-1] = "?"
+            for adjacent_position in self.GetObservableAdjacentPositions():
+                adjacent_position_char = self.map[adjacent_position.x][adjacent_position.y]
+                if adjacent_position_char == "!" or adjacent_position_char == "#":
+                    self.map[adjacent_position.x][adjacent_position.y] = "?"
 
         if self.current_observations["blocked"]:
-            if self.dir == "north":
-                if self.CheckNotWall(posicao_player.x,posicao_player.y+1):
-                    self.map[posicao_player.x][posicao_player.y+1] = "W"
-            if self.dir == "south":
-                if self.CheckNotWall(posicao_player.x,posicao_player.y-1):
-                    self.map[posicao_player.x][posicao_player.y-1] = "W"
-            if self.dir == "east":
-                if self.CheckNotWall(posicao_player.x+1,posicao_player.y):
-                    self.map[posicao_player.x+1][posicao_player.y] = "W"
-            if self.dir == "west":
-                if self.CheckNotWall(posicao_player.x-1,posicao_player.y):
-                    self.map[posicao_player.x-1][posicao_player.y] = "W"
+            position_forward = self.GetPositionForward()
+            if position_forward:
+                self.map[position_forward.x][position_forward.y] = "W"
 
-        if self.map[posicao_player.x][posicao_player.y] == "#":
+        current_position_char = self.map[posicao_player.x][posicao_player.y]
+        if current_position_char == "#" or current_position_char == "?":
             self.map[posicao_player.x][posicao_player.y] = "."
 
-        pass
-
-
-    def print_map(self):
-        for a in range(34):
-            for b in self.map:
-                print (b[a], end = "")
-            print("")
-        print("")
 
     def DecideState(self):
         """ Máquina de estados. É chamada a cada jogada para decidir qual deve ser o estado atual
@@ -542,10 +694,10 @@ class GameAI():
         Bot.py a cada 0.1s e deve informar qual deve ser a próxima ação a ser tomada.
         """
 
-        # printa mapa na tela a cada 300 ações
+        # printa mapa na tela a cada 200 ações
         if self.number_of_moves % 200 == 0:
             self.print_map()
-
+        
         self.number_of_moves += 1
         self.UpdateMap()
         self.past_state = self.current_state
