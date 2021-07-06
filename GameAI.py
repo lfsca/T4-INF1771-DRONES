@@ -484,7 +484,7 @@ class GameAI():
         return nearest_gold
 
 
-    def find_second_nearest_gold():
+    def find_second_nearest_gold(self):
         pass
 
     def find_appropriate_gold(self):
