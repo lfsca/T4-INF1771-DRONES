@@ -847,8 +847,8 @@ class GameAI():
         """
 
         # printa mapa na tela a cada 200 ações
-        if self.number_of_moves % 200 == 0:
-            self.print_map()
+        # if self.number_of_moves % 200 == 0:
+        #     self.print_map()
         
         self.number_of_moves += 1
         self.UpdateMap()

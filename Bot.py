@@ -40,7 +40,7 @@ class Bot():
     timer1 = None
     
     running = True
-    thread_interval = 0.1 # USE BETWEEN 0.1 and 1 (0.1 real setting, 1 debug settings and makes the bot slower)
+    thread_interval = 0.2 # USE BETWEEN 0.1 and 1 (0.1 real setting, 1 debug settings and makes the bot slower)
 
     playerList = {} #new Dictionary<long, PlayerInfo>
     shotList = [] #new List<ShotInfo>
@@ -52,6 +52,8 @@ class Bot():
 
     msg = []
     msgSeconds = 0
+    textSeconds = 0
+    musica = ""
 
     # <summary>
     # Bot Constructor
@@ -67,8 +69,11 @@ class Bot():
         self.client.append_cmd_handler(self.ReceiveCommand)
         self.client.append_chg_handler(self.SocketStatusChange)
 
+        self.musica = self.gerarMusica('musica.txt')
+
         self.client.connect(self.host)
         self.timer1.start()
+        self.sendMsg("Um conto de fadas")
 
     
     def convertFromString(self, c):
@@ -306,13 +311,10 @@ class Bot():
         elif decision ==  "atacar":
             self.client.sendShoot()
         elif decision ==  "pegar_ouro":
-            #self.sendMsg("TAMBEM SEM DINHEIROOO!!!")
             self.client.sendGetItem()
         elif decision == "pegar_anel":
-            #self.sendMsg("TAMBEM SEM DINHEIROOO!!!")
             self.client.sendGetItem()
         elif decision == "pegar_powerup":
-            #self.sendMsg("AMAVA A PRINCESAAAA!!!")
             self.client.sendGetItem()
         elif decision ==  "andar_re":
             self.client.sendBackward()
@@ -320,17 +322,24 @@ class Bot():
         self.client.sendRequestUserStatus()
         self.client.sendRequestObservation()
 
+    def gerarMusica(self,nome_arquivo):
+        with open(nome_arquivo, 'r', encoding = 'UTF-8') as f:
+            while True:
+                for linha in f:
+                    yield linha.strip()
+                f.seek(0)
 
     def timer1_Tick(self):
         
         self.msgSeconds += self.timer1.interval * 1000 # KEEP THIS AS IS - 1000 miliseconds = 1 second
+        self.textSeconds += self.timer1.interval * 1000
 
         self.client.sendRequestGameStatus()
         if self.gameStatus == "Game":
             self.DoDecision()
-            if self.msgSeconds == 5000:
-                #self.sendMsg("UM CONTO DE FADAAAAAAS!!!")
-                pass
+            if self.textSeconds % 20000 == 0:
+                self.sendMsg(next(self.musica))
+
 
                     
 
