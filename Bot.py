@@ -32,7 +32,7 @@ import datetime
 # </summary>
 class Bot():
 
-    name = "Nattanzinho Carpinteiro" # BOT NAME
+    name = "Elias Carpinteiro" # BOT NAME
     host = "atari.icad.puc-rio.br" # SERVER
 
     client = None
@@ -375,7 +375,7 @@ class Bot():
 
             print("Connected")
             self.client.sendName(self.name)
-            self.client.sendRGB(255,128,0)  # BOT COLOR
+            self.client.sendRGB(255,165,0)  # BOT COLOR
             self.client.sendRequestGameStatus()
             self.client.sendRequestUserStatus()
             self.client.sendRequestObservation()

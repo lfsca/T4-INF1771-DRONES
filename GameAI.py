@@ -563,6 +563,7 @@ class GameAI():
         #     self.current_action = "virar_esquerda"
         #     self.SetPlayerPosition(pos.x, pos.y - 1)
         #     self.current_action = "andar"
+
         n = random.randint(0,7)
         if n == 0:
             self.current_action = "virar_direita"
@@ -592,6 +593,10 @@ class GameAI():
         current_position = self.GetPlayerPosition()
         dist_to_gold_now = self.manhattan(current_position, nearest_gold)
         forward_position = self.GetPositionForward()
+        
+        if dist_to_gold_now == 0:
+            self.current_action = ""
+            return
 
         # se andar pra frente te deixa mais perto do ouro mais próximo, anda pra frente
         if forward_position:
@@ -830,7 +835,7 @@ class GameAI():
 
         # se ainda tiver no começo do jogo e não tiver caído em nenhuma das condições
         # anteriores, sai explorando
-        elif self.number_of_moves <= self.max_exploration_ticks or self.golds_found <= 2:
+        elif self.golds_found < 1:
             self.current_state = "random_explore"
             self.StateRandomExplore()
 
