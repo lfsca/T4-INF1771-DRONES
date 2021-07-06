@@ -121,8 +121,8 @@ class GameAI():
     max_avoid_hole_ticks = 3    # standard = 8
     max_exploration_ticks = 500   # standard = 300 - 500
     max_gold_search_ticks = 55      # standard = 55
-    max_unstuck_ticks = 20      #standard = 20      
-    min_golds_to_start_seaching = 2
+    max_unstuck_ticks = 30      #standard = 20      
+    min_golds_to_start_seaching = 3
     thread_sleep = 200      # somente usado para o calculo abaixo
     item_spawn_interval = int((1000/thread_sleep) * 15)
     max_consecutive_missed_shots = 8
@@ -139,6 +139,7 @@ class GameAI():
                             "enemy_in_front": False
     }
 
+    potion_position_being_searched = {"position": None, "start_time": None}
     gold_position_being_searched = {"position": None, "start_time": None}
     timed_out_gold_positions = {}
 
@@ -485,6 +486,17 @@ class GameAI():
         self.timed_out_gold_positions[(position.x, position.y)] = -1000000
 
 
+    def GetAllPotionsPositions(self):
+        """Função auxiliar. Retorna lista com posições (no formato objeto Position) de todos ouros encontrados"""
+
+        potions_positions = []
+        for y in range(34):
+            for x in range(59):
+                if self.map[x][y] == "L":
+                    potions_positions.append(Position(x,y))
+        return potions_positions
+
+
     def GetAllGoldsPositions(self):
         """Função auxiliar. Retorna lista com posições (no formato objeto Position) de todos ouros encontrados"""
 
@@ -496,21 +508,54 @@ class GameAI():
         return golds_positions
 
 
+    def GetPotionPositionBeingSearched(self):
+        return self.potion_position_being_searched["position"]
+
+
     def GetGoldPositionBeingSearched(self):
         return self.gold_position_being_searched["position"]
 
    
+    def GetTimePotionPositionBeingSearched(self):
+        return self.potion_position_being_searched["start_time"]    
+    
+    
     def GetTimeGoldPositionBeingSearched(self):
         return self.gold_position_being_searched["start_time"]
 
 
+    def EraseTimePotionPositionBeingSearched(self):
+        self.potion_position_being_searched["start_time"] = self.number_of_moves
+
+
     def EraseTimeGoldPositionBeingSearched(self):
-        self.gold_position_being_searched["start_time"] = self.number_of_moves + self.max_unstuck_ticks
+        self.gold_position_being_searched["start_time"] = self.number_of_moves
+
+
+    def SetPotionPositionBeingSearched(self, pos):
+        self.potion_position_being_searched["position"] = pos
+        self.potion_position_being_searched["start_time"] = self.number_of_moves
 
 
     def SetGoldPositionBeingSearched(self, pos):
         self.gold_position_being_searched["position"] = pos
         self.gold_position_being_searched["start_time"] = self.number_of_moves
+
+
+    def FindNearestPotion(self):
+        potions_positions = self.GetAllPotionsPositions()
+
+        nearest_potion = None
+        min_distance = 1000000
+        current_position = self.GetPlayerPosition()
+        for potion_position in potions_positions:
+            dist_to_potion = self.manhattan(potion_position, current_position)
+            if dist_to_potion < min_distance:
+                nearest_potion = potion_position
+                min_distance = dist_to_potion
+        if not self.EqualPositions(nearest_potion, self.GetPotionPositionBeingSearched()):
+            self.SetPotionPositionBeingSearched(nearest_potion)
+        return nearest_potion
 
 
     def FindNearestGold(self):
@@ -536,12 +581,21 @@ class GameAI():
         return nearest_gold
 
 
+    def IsAnyPotion(self):
+        all_potions_positions = self.GetAllPotionsPositions()
+        return bool(all_potions_positions)
+
+
     def IsAnyAvailableGold(self):
         all_golds_positions = self.GetAllGoldsPositions()
         for gold_position in all_golds_positions:
             if not self.IsGoldPositionTimedOut(gold_position):
                 return True
         return False
+
+
+    def GetTimeDeltaPotionBeingSearched(self):
+        return self.number_of_moves - self.GetTimePotionPositionBeingSearched()
 
 
     def GetTimeDeltaGoldBeingSearched(self):
@@ -556,6 +610,7 @@ class GameAI():
 
     def CleanMissedShots(self):
         self.consecutive_missed_shots = 0
+
 
     def RandomWalkAvoidingWall(self):
         forward_position = self.GetPositionForward()
@@ -644,14 +699,87 @@ class GameAI():
 
 
     def StateSearchPowerUp(self):
-        # TODO: implementar isso na moral, usando a* para chegar no powerup mais próximo
-        n = random.randint(0,7)
-        if n == 0:
-            self.current_action = "virar_direita"
-        elif n == 1:
-            self.current_action = "virar_esquerda"
-        else:
+        # # TODO: implementar isso na moral, usando a* para chegar no powerup mais próximo
+        # n = random.randint(0,7)
+        # if n == 0:
+        #     self.current_action = "virar_direita"
+        # elif n == 1:
+        #     self.current_action = "virar_esquerda"
+        # else:
+        #     self.current_action = "andar"
+        nearest_potion = self.FindNearestPotion()
+        current_position = self.GetPlayerPosition()
+        dist_to_potion_now = self.manhattan(current_position, nearest_potion)
+        forward_position = self.GetPositionForward()
+
+        # se andar pra frente te deixa mais perto do ouro mais próximo, anda pra frente
+        if forward_position:
+            dist_to_potion_going_forward = self.manhattan(nearest_potion, forward_position)
+            forward_position_char = self.GetCharPosition(forward_position)
+            if dist_to_potion_going_forward < dist_to_potion_now and forward_position_char != "W":
+                self.current_action = "andar"
+                return
+        
+        turning_left_position = self.GetPositionTurningLeft()
+        if turning_left_position:
+            turning_left_position_char = self.GetCharPosition(turning_left_position)
+        turning_right_position = self.GetPositionTurningRight()
+        if turning_right_position:
+            turning_right_position_char = self.GetCharPosition(turning_right_position)
+        backwards_position = self.GetPositionBehind()
+        if backwards_position:
+            backwards_position_char = self.GetCharPosition(backwards_position)
+
+        if turning_left_position:
+            dist_to_potion_going_left = self.manhattan(nearest_potion, turning_left_position)
+            if dist_to_potion_going_left < dist_to_potion_now and turning_left_position_char != "W":
+                self.current_action = "virar_esquerda"
+                return
+        
+        if turning_right_position:
+            dist_to_potion_going_right = self.manhattan(nearest_potion, turning_right_position)
+            if dist_to_potion_going_right < dist_to_potion_now and turning_right_position_char != "W":
+                self.current_action = "virar_direita"
+                return
+        
+        if backwards_position:
+            dist_to_potion_going_backwards = self.manhattan(nearest_potion, backwards_position)
+            if dist_to_potion_going_backwards < dist_to_potion_now and backwards_position_char not in ["W", "!"]:
+                self.current_action = "andar_re"
+                return
+        
+        ######
+
+        if forward_position:
+            if dist_to_potion_going_forward == dist_to_potion_now and forward_position_char != "W":
+                self.current_action = "andar"
+                return
+        
+        if turning_left_position:
+            if dist_to_potion_going_left == dist_to_potion_now and turning_left_position_char != "W":
+                self.current_action = "virar_esquerda"
+                return
+        
+        if turning_right_position:
+            if dist_to_potion_going_right == dist_to_potion_now and turning_right_position_char != "W":
+                self.current_action = "virar_direita"
+                return
+        
+        if backwards_position:
+            if dist_to_potion_going_backwards == dist_to_potion_now and backwards_position_char not in ["W", "!"]:
+                self.current_action = "andar_re"
+                return
+        
+        ####
+
+        if forward_position and forward_position_char != "W":
             self.current_action = "andar"
+        elif turning_left_position and turning_left_position_char != "W":
+            self.current_action = "virar_esquerda"
+        elif turning_right_position and turning_right_position_char != "W":
+            self.current_action = "virar_direita"
+        else:
+            self.current_action = "andar_re"
 
 
     def StateSearchGold(self):
@@ -692,7 +820,7 @@ class GameAI():
         
         if backwards_position:
             dist_to_gold_going_backwards = self.manhattan(nearest_gold, backwards_position)
-            if dist_to_gold_going_backwards < dist_to_gold_now and backwards_position_char != "W":
+            if dist_to_gold_going_backwards < dist_to_gold_now and backwards_position_char not in ["W", "!"]:
                 self.current_action = "andar_re"
                 return
         
@@ -714,7 +842,7 @@ class GameAI():
                 return
         
         if backwards_position:
-            if dist_to_gold_going_backwards == dist_to_gold_now and backwards_position_char != "W":
+            if dist_to_gold_going_backwards == dist_to_gold_now and backwards_position_char not in ["W", "!"]:
                 self.current_action = "andar_re"
                 return
         
@@ -795,11 +923,13 @@ class GameAI():
         # else:
         #     self.current_action = "andar"
 
+
     ###########################################################################
     #
     # Funções principais, chamadas a cada tick
     #
     ###########################################################################
+
 
 
     def UpdateGoldTimeout(self):
@@ -880,7 +1010,8 @@ class GameAI():
         #elif ((self.current_observations["breeze"] or self.current_observations["flash"]) and
               #not (self.IsPositionBehindSafe() and self.IsPositionForwardSafe())):
         #elif self.current_observations["breeze"] or self.current_observations["flash"]:
-        elif self.GetPositionForward() and self.GetCharPosition(self.GetPositionForward()) == "!":
+        elif ((self.GetPositionForward() and self.GetCharPosition(self.GetPositionForward()) == "!") or
+              (self.GetPositionBehind() and self.GetCharPosition(self.GetPositionBehind())== "!")):
             self.current_state = "avoid_hole"
             self.avoid_hole_ticks = 0
             self.StateAvoidHole()
@@ -900,8 +1031,12 @@ class GameAI():
         
         # se vida tá baixa, procura por powerup
         elif self.energy < 50:
-            self.current_state = "search_power_up"
-            self.StateSearchPowerUp()
+            if self.IsAnyPotion():
+                self.current_state = "search_power_up"
+                self.StateSearchPowerUp()
+            else:
+                self.current_state = "random_explore"
+                self.StateRandomExplore()
 
         # se tem inimigo na frente & a vida ta razoavelmente alta & se última ação não
         # tiver sido um tiro que errou, atira. Isso do tiro que errou é pra tentar evitar
@@ -919,7 +1054,8 @@ class GameAI():
             self.current_state = "random_explore"
             self.StateRandomExplore()
 
-        elif (self.past_state == "search_gold" and self.GetTimeDeltaGoldBeingSearched() >= self.max_gold_search_ticks):
+        elif ((self.past_state == "search_gold" and self.GetTimeDeltaGoldBeingSearched() >= self.max_gold_search_ticks) or
+               self.past_state == "search_power_up" and self.GetTimeDeltaPotionBeingSearched() >= self.max_gold_search_ticks):
               self.current_state = "get_unstuck"
               self.unstuck_ticks = 0
               self.EraseTimeGoldPositionBeingSearched()
