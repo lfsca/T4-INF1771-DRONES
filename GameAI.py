@@ -51,19 +51,29 @@ class GameAI():
         avoid_hole_ticks: int. O jeito (que deve ser melhorado) que estou fazendo para o estado
             evitar buracos é girar duas vezes e andar um número x de casas para frente, por isso
             também é um estado que precisa de continuidade. Contador que nem a variável anterior
+        unstuck_ticks: int. Contador para quando o bot está há muito tempo procurando o mesmo ouro.
+            Quando isso acontece, provavelmente ele está preso em algum lugar e o estado unstuck
+            é acionado. Contador como os anteriores
         
         max_escape_ticks: int estático. determina quantas ações o bot deve fazer no estado de
             escapar de inimigos
         max_avoid_hole_ticks: análogo ao anterior para estado de evitar buraco
         max_exploration_ticks: depois que o bot executa ao todo esse número de ações, ele para
             de explorar aleatoriamente e passa a procurar ouro (se não tiver nenhuma outra
-            condição anterior mais importante). Essa lógica pode ser melhorada
+            condição anterior mais importante e se tiver mínimo de ouros encontrado).
+        max_gold_search_ticks: número máximo de ações que são feitas desde o momento que começamos
+            a procurar por um ouro específico até que seja considerado que ele está preso
+        max_unstuck_ticks: número de ações que ele fica no estado unstuck      
+        min_golds_to_start_seaching: mínimo número para ir do estado de exploração para começar a
+            procurar ouro
+        thread_sleep = 200: somente usado para calculo abaixo, representa thread_sleep do bot.py
+        item_spawn_interval: intervalo de spawn dos itens considerando que nascem a cada 15s
         
         current_observations: dicionário que é atualizado a cada "jogada" com as observações atuais
             Chaves deste dicionário (todas booleanas):
                 {
                 blocked         => casa para onde tentou andar está bloqueada (tem parede ou fim do mapa)
-                steps           => inimigo nas adjacências (frente, direita, trás ou esquerda)
+                steps           => inimigo em até manhattan = 2
                 breeze          => buraco nas adjacências (frente, direita, trás ou esquerda)
                 flash           => teletransporte nas adjacências (frente, direita, trás ou esquerda)
                 blueLight       => tesouro na posição atual
@@ -72,7 +82,11 @@ class GameAI():
                 hit             => acertou tiro
                 enemy_in_front  => tem um inimigo a até 10 passos na direção para onde está apontando
                 }
-            
+
+        gold_position_being_searched: dicionário da forma {"position": pos, "start_time": int}, que
+            significa qual o ouro que está sendo procurado e desde quando ele o está (inicialmente são None)
+        timed_out_gold_positions: dicionário da forma {(x,y): int}, representa última vez (que sabemos) que
+            ouro na posicao x,y foi pego
         map: lista de listas 59 x 34, cada posição é um caractere. Inicialmente tudo "#", que significa
             pos. desconhecida. Cada tipo de posição diferente tem o seu caractere, abaixo a lista:
             "#" => Posição totalmente desconhecida
@@ -93,6 +107,7 @@ class GameAI():
     current_action = ""
     current_state = "random_explore"
     past_state = ""
+    consecutive_missed_shots = 0
 
     golds_found = 0
     powerups_found = 0
@@ -100,16 +115,17 @@ class GameAI():
 
     escape_ticks = 0
     avoid_hole_ticks = 0
-    get_unstuck_ticks = 0
+    unstuck_ticks = 0
 
     max_escape_ticks = 8        # standard = 8
     max_avoid_hole_ticks = 3    # standard = 8
     max_exploration_ticks = 500   # standard = 300 - 500
     max_gold_search_ticks = 55      # standard = 55
-    max_get_unstuck_ticks = 15      #standard = 15      
+    max_unstuck_ticks = 20      #standard = 20      
     min_golds_to_start_seaching = 2
     thread_sleep = 200      # somente usado para o calculo abaixo
     item_spawn_interval = int((1000/thread_sleep) * 15)
+    max_consecutive_missed_shots = 8
 
     current_observations = {
                             "blocked": False,
@@ -137,7 +153,7 @@ class GameAI():
     ###########################################################################
 
     def SetStatus(self, x, y, dir, state, score, energy):
-        """ NÃO MEXER!!! Atualiza status do jogador.
+        """ Atualiza status do jogador.
         
         Args:
             x: player position x
@@ -155,7 +171,6 @@ class GameAI():
         self.state = state
         self.score = score
         self.energy = energy
-
 
 
     def GetObservations(self, o):
@@ -224,6 +239,60 @@ class GameAI():
     ###########################################################################
 
 
+    def GetPlayerPosition(self):
+        """ Função auxiliar. Retorna posição atual do jogador
+        
+        Returns: objeto player, da classe Position
+        """
+        return self.player
+
+
+    def GetCharPosition(self, pos):
+        """ Função auxiliar. Dada uma posição, retorna tipo (o char) dela marcado no mapa
+        
+        Args:
+            pos: objeto da classe position
+        Returns:
+            string com tipo
+            None se posição tiver fora do mapa
+        """
+
+        if self.CheckNotOutOfBounds(pos.x, pos.y):
+            return self.map[pos.x][pos.y]
+        return None
+
+
+    def EqualPositions(self, pos1, pos2):
+        """ Returns true if two positions are equal"""
+        if pos1 and pos2:
+            if pos1.x == pos2.x and pos1.y == pos2.y:
+                return True
+        return False
+
+
+    def manhattan(self, pos1, pos2):
+        """ Função auxiliar. Retorna dist de manhattan entre dois pontos."""
+
+        if self.CheckNotOutOfBounds(pos1.x, pos1.y) and self.CheckNotOutOfBounds(pos2.x, pos2.y):
+            return abs(pos1.x - pos2.x) + abs(pos1.y - pos2.y)
+        return None
+
+
+    def CheckNotOutOfBounds(self,x,y):
+        """ Função auxiliar. Verifica se pos. fornecida não está fora do mapa
+        
+            Args:
+                x: x da posição a ser verificada
+                y: y da posição a ser verificada
+            Returns:
+                Bool, True se posição está dentro do mapa
+        """
+        
+        if x>58 or x<0 or y<0 or y>33:
+            return False
+        return True
+
+
     def GetObservableAdjacentPositions(self):
         """ Função auxiliar. Retorna lista de posições adjacentes existentes.
         Faz o check para ver se posições realmente existem.
@@ -247,7 +316,8 @@ class GameAI():
 
 
     def GetAllAdjacentPositions(self):
-        """ Função auxiliar. Retorna lista de posições adjacentes (incluindo diagonais) existentes
+        """ Função auxiliar. Retorna lista de posições adjacentes (incluindo diagonais) existentes.
+            Checa se posições realmente existem
         
         Returns:
             Lista de objetos Position correspondentes 
@@ -369,53 +439,17 @@ class GameAI():
 
 
     def IsPositionForwardSafe(self):
+        """ Função auxiliar. True se posição à frente não é possível buraco"""
         position_forward = self.GetPositionForward()
         if position_forward:
             return self.GetCharPosition(position_forward) != "!"
 
 
     def IsPositionBehindSafe(self):
+        """ Função auxiliar. True se posição atrás não é possível buraco"""
         position_behind = self.GetPositionBehind()
         if position_behind:
             return self.GetCharPosition(position_behind) != "!"
-        return True
-
-
-    def GetPlayerPosition(self):
-        """ Função auxiliar. Retorna posição atual do jogador
-        
-        Returns: objeto player, da classe Position
-        """
-        return self.player
-
-
-    def GetCharPosition(self, pos):
-        """ Função auxiliar. Dada uma posição, retorna tipo (o char) dela marcado no mapa
-        
-        Args:
-            pos: objeto da classe position
-        Returns:
-            string com tipo
-            None se posição tiver fora do mapa
-        """
-
-        if self.CheckNotOutOfBounds(pos.x, pos.y):
-            return self.map[pos.x][pos.y]
-        return None
-
-
-    def CheckNotOutOfBounds(self,x,y):
-        """ Função auxiliar. Verifica se pos. fornecida não está fora do mapa
-        
-            Args:
-                x: x da posição a ser verificada
-                y: y da posição a ser verificada
-            Returns:
-                Bool, True se posição está dentro do mapa
-        """
-        
-        if x>58 or x<0 or y<0 or y>33:
-            return False
         return True
 
 
@@ -427,21 +461,12 @@ class GameAI():
                 print (b[a], end = "")
             print("")
         print("")
-
-
-    def manhattan(self, pos1, pos2):
-        """ Função auxiliar. Retorna dist de manhattan entre dois pontos."""
-
-        if self.CheckNotOutOfBounds(pos1.x, pos1.y) and self.CheckNotOutOfBounds(pos2.x, pos2.y):
-            return abs(pos1.x - pos2.x) + abs(pos1.y - pos2.y)
-        return None
     
 
     def SetTimedOutGoldPosition(self, pos):
         """ Função auxiliar. Adiciona pos e tempo atual ao dicionario de posicoes de ouro sem ouro no momento"""
 
         self.timed_out_gold_positions[pos.x, pos.y] = self.number_of_moves
-
 
 
     def IsGoldPositionTimedOut(self, pos):
@@ -480,20 +505,12 @@ class GameAI():
 
 
     def EraseTimeGoldPositionBeingSearched(self):
-        self.gold_position_being_searched["start_time"] = self.number_of_moves + self.max_get_unstuck_ticks
+        self.gold_position_being_searched["start_time"] = self.number_of_moves + self.max_unstuck_ticks
 
 
     def SetGoldPositionBeingSearched(self, pos):
         self.gold_position_being_searched["position"] = pos
         self.gold_position_being_searched["start_time"] = self.number_of_moves
-
-   
-    def EqualPositions(self, pos1, pos2):
-        """ Returns true if two positions are equal"""
-        if pos1 and pos2:
-            if pos1.x == pos2.x and pos1.y == pos2.y:
-                return True
-        return False
 
 
     def FindNearestGold(self):
@@ -533,6 +550,71 @@ class GameAI():
         return self.number_of_moves - self.GetTimeGoldPositionBeingSearched()
 
 
+    def AddMissedShot(self):
+        self.consecutive_missed_shots += 1
+
+
+    def CleanMissedShots(self):
+        self.consecutive_missed_shots = 0
+
+    def RandomWalkAvoidingWall(self):
+        forward_position = self.GetPositionForward()
+        if forward_position:
+            forward_position_char = self.GetCharPosition(forward_position)
+        turning_left_position = self.GetPositionTurningLeft()
+        if turning_left_position:
+            turning_left_position_char = self.GetCharPosition(turning_left_position)
+        turning_right_position = self.GetPositionTurningRight()
+        if turning_right_position:
+            turning_right_position_char = self.GetCharPosition(turning_right_position)
+        n = random.randint(0,7)
+
+        if (forward_position and forward_position_char not in ["W", "!"] and
+            turning_left_position and turning_left_position_char not in ["W", "!"] and
+            turning_right_position and turning_right_position_char not in ["W", "!"]):
+            if n == 0:
+                return "virar_direita"
+            elif n == 1:
+                return "virar_esquerda"
+            else:
+                return "andar"
+            
+        if (forward_position and forward_position_char not in ["W", "!"] and
+            turning_left_position and turning_left_position_char not in ["W", "!"]):
+            if n <= 1:
+                return "virar_esquerda"
+            else:
+                return "andar"
+
+        if (forward_position and forward_position_char not in ["W", "!"] and
+            turning_right_position and turning_right_position_char not in ["W", "!"]):
+            if n <= 1:
+                return "virar_direita"
+            else:
+                return "andar"
+        
+        if (turning_left_position and turning_left_position_char not in ["W", "!"] and
+            turning_right_position and turning_right_position_char not in ["W", "!"]):
+            if n <= 3:
+                return "virar_direita"
+            else:
+                return "virar_esquerda"
+        
+        if forward_position and forward_position_char not in ["W", "!"]:
+            return "andar"
+        if turning_left_position and turning_left_position_char not in ["W", "!"]:
+            return "virar_esquerda"
+        if turning_right_position and turning_right_position_char not in ["W", "!"]:
+            return "virar_esquerda"
+        
+        if n == 0:
+            return "virar_direita"
+        elif n == 1:
+            return "virar_esquerda"
+        else:
+            return "andar"
+
+
     ###########################################################################
     #
     # Funções de estado
@@ -547,14 +629,14 @@ class GameAI():
         self.current_action = "pegar_ouro"
 
     def StateEscape(self):
-
-        n = random.randint(0,7)
-        if n == 0:
-            self.current_action = "virar_direita"
-        elif n == 1:
-            self.current_action = "virar_esquerda"
-        else:
-            self.current_action = "andar"
+        self.current_action = self.RandomWalkAvoidingWall()
+        # n = random.randint(0,7)
+        # if n == 0:
+        #     self.current_action = "virar_direita"
+        # elif n == 1:
+        #     self.current_action = "virar_esquerda"
+        # else:
+        #     self.current_action = "andar"
 
 
     def StateAttack(self):
@@ -697,8 +779,6 @@ class GameAI():
 
 
     def StateAvoidHole(self):
-        # TODO: dá pra implementar isso melhor. Do jeito que tá, quando chega num buraco
-        # ou tp vira 180° e anda uma quantidade x de passos (até chegar no self.max_avoid_hole_ticks)
         if self.avoid_hole_ticks <= 1:
             self.current_action = "virar_esquerda"
         else:
@@ -706,17 +786,18 @@ class GameAI():
 
 
     def StateGetUnstuck(self):
-        n = random.randint(0,7)
-        if n == 0:
-            self.current_action = "virar_direita"
-        elif n == 1:
-            self.current_action = "virar_esquerda"
-        else:
-            self.current_action = "andar"
+        self.current_action = self.RandomWalkAvoidingWall()
+        # n = random.randint(0,7)
+        # if n == 0:
+        #     self.current_action = "virar_direita"
+        # elif n == 1:
+        #     self.current_action = "virar_esquerda"
+        # else:
+        #     self.current_action = "andar"
 
     ###########################################################################
     #
-    # Funções principais, chamadas a cada thread_interval
+    # Funções principais, chamadas a cada tick
     #
     ###########################################################################
 
@@ -729,6 +810,12 @@ class GameAI():
             if not self.IsGoldPositionTimedOut(Position(pos[0], pos[1])):
                 self.EraseTimedOutGoldPosition(Position(pos[0], pos[1]))
 
+
+    def UpdateMissedShots(self):
+        if self.past_state == "attack" and not self.current_observations["hit"]:
+            self.AddMissedShot()
+        else:
+            self.CleanMissedShots()
 
     def UpdateMap(self):
         """ Atualiza o mapa a cada jogada com as informações disponíveis no momento.
@@ -792,13 +879,15 @@ class GameAI():
         # se sentiu cheirinho de buraco ou tp, entra no estado de desviar dele
         #elif ((self.current_observations["breeze"] or self.current_observations["flash"]) and
               #not (self.IsPositionBehindSafe() and self.IsPositionForwardSafe())):
-        elif self.current_observations["breeze"] or self.current_observations["flash"]:
+        #elif self.current_observations["breeze"] or self.current_observations["flash"]:
+        elif self.GetPositionForward() and self.GetCharPosition(self.GetPositionForward()) == "!":
             self.current_state = "avoid_hole"
             self.avoid_hole_ticks = 0
             self.StateAvoidHole()
         
-        # se sofreu dano, entra no estado de fugir (da pra melhorar essa logica aqui)
-        elif self.current_observations["damage"]:
+        # se sofreu dano & (não deu dano ou não ta com vida alta), entra no estado de fugir
+        elif (self.current_observations["damage"] and 
+              (not self.current_observations["hit"] or self.energy < 80)):
             self.current_state = "escape"
             self.escape_ticks = 0
             self.StateEscape()
@@ -820,7 +909,7 @@ class GameAI():
         # tem que testar. Talvez seja melhor fazer tipo, se últimas 5 ações tiverem sido tiros
         # errados em vez de só checar a última
         elif (self.current_observations["enemy_in_front"] and self.energy > 50 and
-              not (self.past_state == "attack" and not self.current_observations["hit"])):
+              self.consecutive_missed_shots < self.max_consecutive_missed_shots):
             self.current_state = "attack"
             self.StateAttack()
 
@@ -832,13 +921,13 @@ class GameAI():
 
         elif (self.past_state == "search_gold" and self.GetTimeDeltaGoldBeingSearched() >= self.max_gold_search_ticks):
               self.current_state = "get_unstuck"
-              self.get_unstuck_ticks = 0
+              self.unstuck_ticks = 0
               self.EraseTimeGoldPositionBeingSearched()
               self.StateGetUnstuck()
         
-        elif self.past_state == "get_unstuck" and self.get_unstuck_ticks <= self.max_get_unstuck_ticks:
+        elif self.past_state == "get_unstuck" and self.unstuck_ticks <= self.max_unstuck_ticks:
             self.current_state = "get_unstuck"
-            self.get_unstuck_ticks += 1
+            self.unstuck_ticks += 1
             self.StateGetUnstuck()
 
         # se não tiver mais no começo do jogo e não tiver caído em nenhuma das condições
@@ -869,6 +958,7 @@ class GameAI():
         self.number_of_moves += 1
         self.UpdateMap()
         self.past_state = self.current_state
+        self.UpdateMissedShots()
         self.DecideState()
 
         return self.current_action
