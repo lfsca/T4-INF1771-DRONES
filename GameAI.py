@@ -485,7 +485,8 @@ class GameAI():
 
 
     def find_second_nearest_gold(self):
-        pass
+        return Position(25,17)
+
 
     def find_appropriate_gold(self):
         if self.gold_position_being_searched["start_time"]:
