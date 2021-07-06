@@ -23,7 +23,7 @@ class GameAI():
         (obs: para acessar qualquer uma dessas dentro das funções, usar self.<nome_da_variavel>)
 
         player: player.x indica posicao x atual, player.y indica posicao y atual
-        state: não importa
+        state: não usamos
         dir: string com a direção em inglês para onde está apontando
         score: int com pontuação atual
         energy: int com hp
@@ -35,6 +35,8 @@ class GameAI():
             qualquer um destes: ("grab", "avoid_hole", "escape", "search_power_up",
             "attack", "random_explore", "search_gold")
         past_state: string com estado anterior. Mesmas opções do current_state
+        consecutive_missed_shots: int com número de tiros consecutivos errados. É
+            zerado quando acerta ou quando não atira
 
         golds_found: int. quantidade de ouros diferentes já encontrados. Por enquanto não
             é usada para nada, pensei que poderia ser útil no futuro
@@ -64,10 +66,16 @@ class GameAI():
         max_gold_search_ticks: número máximo de ações que são feitas desde o momento que começamos
             a procurar por um ouro específico até que seja considerado que ele está preso
         max_unstuck_ticks: número de ações que ele fica no estado unstuck      
-        min_golds_to_start_seaching: mínimo número para ir do estado de exploração para começar a
-            procurar ouro
-        thread_sleep = 200: somente usado para calculo abaixo, representa thread_sleep do bot.py
+        min_golds_to_start_seaching: mínimo número de ouros encontrados para ir do estado de exploração
+            para começar a procurar ouro
+        thread_sleep: somente usado para calculo abaixo, representa thread_sleep do bot.py
         item_spawn_interval: intervalo de spawn dos itens considerando que nascem a cada 15s
+        max_consecutive_missed_shots: serve para não ficar atirando na parede. O nome é meio misleading,
+            na verdade é o máximo de vezes que pode dar um tiro e no tick seguinte não receber observação
+            de que atingiu o adversário
+        min_hp_escape: se levar dano e vida for menor ou igual a isso, entra em estado de fuga
+        min_hp_attack: se vir inimigo à frente & vida tiver maior que isso & não errou muito
+            tiro recentemente, ataca
         
         current_observations: dicionário que é atualizado a cada "jogada" com as observações atuais
             Chaves deste dicionário (todas booleanas):
@@ -83,6 +91,8 @@ class GameAI():
                 enemy_in_front  => tem um inimigo a até 10 passos na direção para onde está apontando
                 }
 
+        powerup_position_being_searched: dicionário da forma {"position": pos, "start_time": int}, que
+            significa qual o powerup que está sendo procurado e desde quando ele o está (inicialmente são None)
         gold_position_being_searched: dicionário da forma {"position": pos, "start_time": int}, que
             significa qual o ouro que está sendo procurado e desde quando ele o está (inicialmente são None)
         timed_out_gold_positions: dicionário da forma {(x,y): int}, representa última vez (que sabemos) que
@@ -117,15 +127,19 @@ class GameAI():
     avoid_hole_ticks = 0
     unstuck_ticks = 0
 
-    max_escape_ticks = 8        # standard = 8
-    max_avoid_hole_ticks = 3    # standard = 8
-    max_exploration_ticks = 500   # standard = 300 - 500
-    max_gold_search_ticks = 55      # standard = 55
-    max_unstuck_ticks = 40      #standard = 30      
-    min_golds_to_start_seaching = 3
+    # as 9 variávies abaixo alteram o comportamento do bot no jogo
+    max_escape_ticks = 8                # standard = 8
+    max_avoid_hole_ticks = 3            # standard = 8
+    max_exploration_ticks = 500         # standard = 300 - 500
+    max_gold_search_ticks = 55          # standard = 45 - 60
+    max_unstuck_ticks = 40              # standard = 30      
+    min_golds_to_start_seaching = 3     # standard = 2 - 4
+    max_consecutive_missed_shots = 10   # standard = 5 - 15
+    min_hp_escape = 70                  # standard = 50 - 80
+    min_hp_attack = 50                  # standard = 40-70
+
     thread_sleep = 200      # somente usado para o calculo abaixo
     item_spawn_interval = int((1000/thread_sleep) * 15)
-    max_consecutive_missed_shots = 10
 
     current_observations = {
                             "blocked": False,
@@ -139,7 +153,7 @@ class GameAI():
                             "enemy_in_front": False
     }
 
-    potion_position_being_searched = {"position": None, "start_time": None}
+    powerup_position_being_searched = {"position": None, "start_time": None}
     gold_position_being_searched = {"position": None, "start_time": None}
     timed_out_gold_positions = {}
 
@@ -152,6 +166,7 @@ class GameAI():
     # Funções que não são chamadas por outras funções deste arquivo
     #
     ###########################################################################
+
 
     def SetStatus(self, x, y, dir, state, score, energy):
         """ Atualiza status do jogador.
@@ -175,8 +190,7 @@ class GameAI():
 
 
     def GetObservations(self, o):
-        """ NÃO CHAMAR ESTA FUNÇÃO!!!
-        Função chamada pelo Bot.py para atualizar as observações a cada jogada. 
+        """ Função chamada pelo Bot.py para atualizar as observações a cada jogada. 
         Só é chamada se algo foi observado.
 
         Args:
@@ -210,8 +224,7 @@ class GameAI():
 
 
     def GetObservationsClean(self):
-        """ NÃO CHAMAR ESTA FUNÇÃO!!!
-            Função praticamente igual à anterior, mas indica que nada foi
+        """ Função praticamente igual à anterior, mas indica que nada foi
             observado no momento (pq a posição atual não tem nada
             e também não tem buraco, teletransporte nem inimigo ao redor).
         """
@@ -465,7 +478,8 @@ class GameAI():
     
 
     def SetTimedOutGoldPosition(self, pos):
-        """ Função auxiliar. Adiciona pos e tempo atual ao dicionario de posicoes de ouro sem ouro no momento"""
+        """ Função auxiliar. Adiciona pos e tempo atual ao dicionario de posicoes de 
+        ouro sem ouro no momento"""
 
         self.timed_out_gold_positions[pos.x, pos.y] = self.number_of_moves
 
@@ -486,19 +500,21 @@ class GameAI():
         self.timed_out_gold_positions[(position.x, position.y)] = -1000000
 
 
-    def GetAllPotionsPositions(self):
-        """Função auxiliar. Retorna lista com posições (no formato objeto Position) de todos ouros encontrados"""
+    def GetAllPowerupsPositions(self):
+        """Função auxiliar. Retorna lista com posições (no formato objeto Position) de todos 
+        ouros encontrados"""
 
-        potions_positions = []
+        powerups_positions = []
         for y in range(34):
             for x in range(59):
                 if self.map[x][y] == "L":
-                    potions_positions.append(Position(x,y))
-        return potions_positions
+                    powerups_positions.append(Position(x,y))
+        return powerups_positions
 
 
     def GetAllGoldsPositions(self):
-        """Função auxiliar. Retorna lista com posições (no formato objeto Position) de todos ouros encontrados"""
+        """Função auxiliar. Retorna lista com posições (no formato objeto Position) de todos 
+        ouros encontrados"""
 
         golds_positions = []
         for y in range(34):
@@ -508,33 +524,33 @@ class GameAI():
         return golds_positions
 
 
-    def GetPotionPositionBeingSearched(self):
-        return self.potion_position_being_searched["position"]
+    def GetPowerupPositionBeingSearched(self):
+        return self.powerup_position_being_searched["position"]
 
 
     def GetGoldPositionBeingSearched(self):
         return self.gold_position_being_searched["position"]
 
    
-    def GetTimePotionPositionBeingSearched(self):
-        return self.potion_position_being_searched["start_time"]    
+    def GetTimePowerupPositionBeingSearched(self):
+        return self.powerup_position_being_searched["start_time"]    
     
     
     def GetTimeGoldPositionBeingSearched(self):
         return self.gold_position_being_searched["start_time"]
 
 
-    def EraseTimePotionPositionBeingSearched(self):
-        self.potion_position_being_searched["start_time"] = self.number_of_moves
+    def EraseTimePowerupPositionBeingSearched(self):
+        self.powerup_position_being_searched["start_time"] = self.number_of_moves
 
 
     def EraseTimeGoldPositionBeingSearched(self):
         self.gold_position_being_searched["start_time"] = self.number_of_moves
 
 
-    def SetPotionPositionBeingSearched(self, pos):
-        self.potion_position_being_searched["position"] = pos
-        self.potion_position_being_searched["start_time"] = self.number_of_moves
+    def SetPowerupPositionBeingSearched(self, pos):
+        self.powerup_position_being_searched["position"] = pos
+        self.powerup_position_being_searched["start_time"] = self.number_of_moves
 
 
     def SetGoldPositionBeingSearched(self, pos):
@@ -542,20 +558,27 @@ class GameAI():
         self.gold_position_being_searched["start_time"] = self.number_of_moves
 
 
-    def FindNearestPotion(self):
-        potions_positions = self.GetAllPotionsPositions()
+    def FindNearestPowerup(self):
+        """ Função auxiliar. Retorna posição (no formato objeto Position) do powerup mais próximo do bot.
 
-        nearest_potion = None
+        Returns:
+            Objeto position com posição do powerpoint mais próximo de onde o bot está no momento
+            None se não tiver nenhum powerpoint descoberto ainda
+        """
+
+        powerups_positions = self.GetAllPowerupsPositions()
+
+        nearest_powerup = None
         min_distance = 1000000
         current_position = self.GetPlayerPosition()
-        for potion_position in potions_positions:
-            dist_to_potion = self.manhattan(potion_position, current_position)
-            if dist_to_potion < min_distance:
-                nearest_potion = potion_position
-                min_distance = dist_to_potion
-        if not self.EqualPositions(nearest_potion, self.GetPotionPositionBeingSearched()):
-            self.SetPotionPositionBeingSearched(nearest_potion)
-        return nearest_potion
+        for powerup_position in powerups_positions:
+            dist_to_powerup = self.manhattan(powerup_position, current_position)
+            if dist_to_powerup < min_distance:
+                nearest_powerup = powerup_position
+                min_distance = dist_to_powerup
+        if not self.EqualPositions(nearest_powerup, self.GetPowerupPositionBeingSearched()):
+            self.SetPowerupPositionBeingSearched(nearest_powerup)
+        return nearest_powerup
 
 
     def FindNearestGold(self):
@@ -581,12 +604,15 @@ class GameAI():
         return nearest_gold
 
 
-    def IsAnyPotion(self):
-        all_potions_positions = self.GetAllPotionsPositions()
-        return bool(all_potions_positions)
+    def IsAnyPowerup(self):
+        """ Retorna true se algum powerup foi encontrado no mapa"""
+        all_powerups_positions = self.GetAllPowerupsPositions()
+        return bool(all_powerups_positions)
 
 
     def IsAnyAvailableGold(self):
+        " Retorna true se tem algum ouro spawnado (a menos que outra pessoa tenha pegado) no mapa"
+
         all_golds_positions = self.GetAllGoldsPositions()
         for gold_position in all_golds_positions:
             if not self.IsGoldPositionTimedOut(gold_position):
@@ -594,25 +620,30 @@ class GameAI():
         return False
 
 
-    def GetTimeDeltaPotionBeingSearched(self):
-        return self.number_of_moves - self.GetTimePotionPositionBeingSearched()
+    def GetTimeDeltaPowerupBeingSearched(self):
+        """ Retorna há quanto tempo o mesmo powerup está sendo buscado"""
+        return self.number_of_moves - self.GetTimePowerupPositionBeingSearched()
 
 
     def GetTimeDeltaGoldBeingSearched(self):
-        """ Função auxiliar. Retorna há quantos passos ouro atual está sendo procurado"""
-        #print(f"sendo procurado há {self.number_of_moves - self.GetTimeGoldPositionBeingSearched()}")
+        """ Função auxiliar. Retorna há quantos passos o mesmo está sendo procurado"""
         return self.number_of_moves - self.GetTimeGoldPositionBeingSearched()
 
 
     def AddMissedShot(self):
+        """ Adiciona +1 à contagem de missed shots"""
         self.consecutive_missed_shots += 1
 
 
     def CleanMissedShots(self):
+        """ Zera contagem de missed shots"""
         self.consecutive_missed_shots = 0
 
 
     def RandomWalkAvoidingWall(self):
+        """ Retorna próxima ação a ser tomada em uma caminhada aleatória, evitando
+        colisões com a parede. Dá probabilidades maiores para andar para a frente"""
+
         forward_position = self.GetPositionForward()
         if forward_position:
             forward_position_char = self.GetCharPosition(forward_position)
@@ -683,6 +714,7 @@ class GameAI():
     def StateGrab(self):
         self.current_action = "pegar_ouro"
 
+
     def StateEscape(self):
         self.current_action = self.RandomWalkAvoidingWall()
         # n = random.randint(0,7)
@@ -699,24 +731,17 @@ class GameAI():
 
 
     def StateSearchPowerUp(self):
-        # # TODO: implementar isso na moral, usando a* para chegar no powerup mais próximo
-        # n = random.randint(0,7)
-        # if n == 0:
-        #     self.current_action = "virar_direita"
-        # elif n == 1:
-        #     self.current_action = "virar_esquerda"
-        # else:
-        #     self.current_action = "andar"
-        nearest_potion = self.FindNearestPotion()
+        
+        nearest_powerup = self.FindNearestPowerup()
         current_position = self.GetPlayerPosition()
-        dist_to_potion_now = self.manhattan(current_position, nearest_potion)
+        dist_to_powerup_now = self.manhattan(current_position, nearest_powerup)
         forward_position = self.GetPositionForward()
 
         # se andar pra frente te deixa mais perto do ouro mais próximo, anda pra frente
         if forward_position:
-            dist_to_potion_going_forward = self.manhattan(nearest_potion, forward_position)
+            dist_to_powerup_going_forward = self.manhattan(nearest_powerup, forward_position)
             forward_position_char = self.GetCharPosition(forward_position)
-            if dist_to_potion_going_forward < dist_to_potion_now and forward_position_char != "W":
+            if dist_to_powerup_going_forward < dist_to_powerup_now and forward_position_char != "W":
                 self.current_action = "andar"
                 return
         
@@ -731,42 +756,42 @@ class GameAI():
             backwards_position_char = self.GetCharPosition(backwards_position)
 
         if turning_left_position:
-            dist_to_potion_going_left = self.manhattan(nearest_potion, turning_left_position)
-            if dist_to_potion_going_left < dist_to_potion_now and turning_left_position_char != "W":
+            dist_to_powerup_going_left = self.manhattan(nearest_powerup, turning_left_position)
+            if dist_to_powerup_going_left < dist_to_powerup_now and turning_left_position_char != "W":
                 self.current_action = "virar_esquerda"
                 return
         
         if turning_right_position:
-            dist_to_potion_going_right = self.manhattan(nearest_potion, turning_right_position)
-            if dist_to_potion_going_right < dist_to_potion_now and turning_right_position_char != "W":
+            dist_to_powerup_going_right = self.manhattan(nearest_powerup, turning_right_position)
+            if dist_to_powerup_going_right < dist_to_powerup_now and turning_right_position_char != "W":
                 self.current_action = "virar_direita"
                 return
         
         if backwards_position:
-            dist_to_potion_going_backwards = self.manhattan(nearest_potion, backwards_position)
-            if dist_to_potion_going_backwards < dist_to_potion_now and backwards_position_char not in ["W", "!"]:
+            dist_to_powerup_going_backwards = self.manhattan(nearest_powerup, backwards_position)
+            if dist_to_powerup_going_backwards < dist_to_powerup_now and backwards_position_char not in ["W", "!"]:
                 self.current_action = "andar_re"
                 return
         
         ######
 
         if forward_position:
-            if dist_to_potion_going_forward == dist_to_potion_now and forward_position_char != "W":
+            if dist_to_powerup_going_forward == dist_to_powerup_now and forward_position_char != "W":
                 self.current_action = "andar"
                 return
         
         if turning_left_position:
-            if dist_to_potion_going_left == dist_to_potion_now and turning_left_position_char != "W":
+            if dist_to_powerup_going_left == dist_to_powerup_now and turning_left_position_char != "W":
                 self.current_action = "virar_esquerda"
                 return
         
         if turning_right_position:
-            if dist_to_potion_going_right == dist_to_potion_now and turning_right_position_char != "W":
+            if dist_to_powerup_going_right == dist_to_powerup_now and turning_right_position_char != "W":
                 self.current_action = "virar_direita"
                 return
         
         if backwards_position:
-            if dist_to_potion_going_backwards == dist_to_potion_now and backwards_position_char not in ["W", "!"]:
+            if dist_to_powerup_going_backwards == dist_to_powerup_now and backwards_position_char not in ["W", "!"]:
                 self.current_action = "andar_re"
                 return
         
@@ -860,7 +885,6 @@ class GameAI():
 
     def StateRandomExplore(self):
 
-
         # Basicamente, a lógica que usei nessa função foi a seguinte: na fase de explorar,
         # é melhor dar prioridade para ir para posições ainda desconhecidas (ou seja,
         # marcadas com "?"). E também, é melhor ir pra frente do que virar e ir para
@@ -915,13 +939,6 @@ class GameAI():
 
     def StateGetUnstuck(self):
         self.current_action = self.RandomWalkAvoidingWall()
-        # n = random.randint(0,7)
-        # if n == 0:
-        #     self.current_action = "virar_direita"
-        # elif n == 1:
-        #     self.current_action = "virar_esquerda"
-        # else:
-        #     self.current_action = "andar"
 
 
     ###########################################################################
@@ -933,6 +950,8 @@ class GameAI():
 
 
     def UpdateGoldTimeout(self):
+        """ Chamado a cada tick para atualizar tempo de spawn dos ouros"""
+
         posicao_player = self.GetPlayerPosition()
         if self.GetCharPosition(posicao_player) == "T":
             self.SetTimedOutGoldPosition(posicao_player)
@@ -942,13 +961,19 @@ class GameAI():
 
 
     def UpdateMissedShots(self):
+        """ Chamado a cada tick para atualizar variável missed_shots"""
+
         if self.past_state == "attack" and not self.current_observations["hit"]:
             self.AddMissedShot()
         else:
             self.CleanMissedShots()
 
+
     def UpdateMap(self):
         """ Atualiza o mapa a cada jogada com as informações disponíveis no momento.
+
+        Se não sente brisa ou flash, marca posições adjacentes como seguras. Se sentir
+        um dos dois, marca posições adjacentes ainda não marcadas como perigosas
         """
 
         posicao_player = self.GetPlayerPosition()
@@ -986,16 +1011,15 @@ class GameAI():
 
     def DecideState(self):
         """ Máquina de estados. É chamada a cada jogada para decidir qual deve ser o estado atual
-        e chamar a função correspondente, que determinará qual ação será tomada. Dá pra melhorar
-        bastante a lógica dela, é um esboço
+        e chamar a função correspondente, que determinará qual ação será tomada.
         """
 
-        # de qq jeito, se passar literalmente por cima de um ouro acho que sempre vale a pena pegar
+        # de qq jeito, se passar por cima de um ouro consideramos que sempre vale a pena pegar
         if self.current_observations["blueLight"]:
             self.current_state = "grab"
             self.StateGrab()
 
-        # analogamente, se passar por cima de poção e n tiver com vida cheia, acho que vale tb
+        # analogamente, se passar por cima de poção e não tiver com vida cheia,vale também
         elif self.current_observations["redLight"] and self.energy < 100:
             self.current_state = "grab"
             self.StateGrab()
@@ -1006,19 +1030,16 @@ class GameAI():
             self.avoid_hole_ticks += 1
             self.StateAvoidHole()
 
-        # se sentiu cheirinho de buraco ou tp, entra no estado de desviar dele
-        #elif ((self.current_observations["breeze"] or self.current_observations["flash"]) and
-              #not (self.IsPositionBehindSafe() and self.IsPositionForwardSafe())):
-        #elif self.current_observations["breeze"] or self.current_observations["flash"]:
+        # se posição à frente ou atrás está marcada como perigosa, entra no estado de evitar buraco
         elif ((self.GetPositionForward() and self.GetCharPosition(self.GetPositionForward()) == "!") or
               (self.GetPositionBehind() and self.GetCharPosition(self.GetPositionBehind())== "!")):
             self.current_state = "avoid_hole"
             self.avoid_hole_ticks = 0
             self.StateAvoidHole()
         
-        # se sofreu dano & (não deu dano ou não ta com vida alta), entra no estado de fugir
+        # se sofreu dano & (não deu dano | não ta com vida alta), entra no estado de fugir
         elif (self.current_observations["damage"] and 
-              (not self.current_observations["hit"] or self.energy < 80)):
+              (not self.current_observations["hit"] or self.energy <= self.min_hp_escape)):
             self.current_state = "escape"
             self.escape_ticks = 0
             self.StateEscape()
@@ -1029,21 +1050,20 @@ class GameAI():
             self.escape_ticks += 1
             self.StateEscape()
         
-        # se vida tá baixa, procura por powerup
+        # se vida tá baixa, procura por powerup se já tiver encontrado um antes. caso contrário, explora
+        # o mapa no intuito de achar um novo.
         elif self.energy < 50:
-            if self.IsAnyPotion():
+            if self.IsAnyPowerup():
                 self.current_state = "search_power_up"
                 self.StateSearchPowerUp()
             else:
                 self.current_state = "random_explore"
                 self.StateRandomExplore()
 
-        # se tem inimigo na frente & a vida ta razoavelmente alta & se última ação não
-        # tiver sido um tiro que errou, atira. Isso do tiro que errou é pra tentar evitar
-        # de ficar atirando na parede se tiver inimigo atrás dela, mas não sei se é uma boa,
-        # tem que testar. Talvez seja melhor fazer tipo, se últimas 5 ações tiverem sido tiros
-        # errados em vez de só checar a última
-        elif (self.current_observations["enemy_in_front"] and self.energy > 50 and
+        # se tem inimigo na frente & a vida ta razoavelmente alta & não errou muito
+        # tiro recentemente, atira. Isso do tiro que errou é pra tentar evitar
+        # de ficar atirando na parede se tiver inimigo atrás dela.
+        elif (self.current_observations["enemy_in_front"] and self.energy > self.min_hp_attack and
               self.consecutive_missed_shots < self.max_consecutive_missed_shots):
             self.current_state = "attack"
             self.StateAttack()
@@ -1054,24 +1074,28 @@ class GameAI():
             self.current_state = "random_explore"
             self.StateRandomExplore()
 
+        # se tiver há muito tempo procurando o mesmo ouro, pode indicar que ele está travado. Aí,
+        # entra no estado de destravar, executando movimentos semi-aleatórios por um delta t
         elif ((self.past_state == "search_gold" and self.GetTimeDeltaGoldBeingSearched() >= self.max_gold_search_ticks) or
-               self.past_state == "search_power_up" and self.GetTimeDeltaPotionBeingSearched() >= self.max_gold_search_ticks):
+               self.past_state == "search_power_up" and self.GetTimeDeltaPowerupBeingSearched() >= self.max_gold_search_ticks):
               self.current_state = "get_unstuck"
               self.unstuck_ticks = 0
               self.EraseTimeGoldPositionBeingSearched()
               self.StateGetUnstuck()
         
+        # se ainda não terminou de destravar, continua destravando
         elif self.past_state == "get_unstuck" and self.unstuck_ticks <= self.max_unstuck_ticks:
             self.current_state = "get_unstuck"
             self.unstuck_ticks += 1
             self.StateGetUnstuck()
 
-        # se não tiver mais no começo do jogo e não tiver caído em nenhuma das condições
-        # anteriores, tenta achar ouro
+        # se não tiver mais no começo do jogo & não tiver caído em nenhuma das condições
+        # anteriores & tem ouro descoberto e spawnado, tenta achar ouro
         elif self.IsAnyAvailableGold():
             self.current_state = "search_gold"
             self.StateSearchGold()
         
+        # finalmente, se não caiu em nenhuma das outras, explora tentando achar posições novas
         else:
             self.current_state = "random_explore"
             self.StateRandomExplore()
@@ -1087,9 +1111,6 @@ class GameAI():
         # if self.number_of_moves % 200 == 0:
         #     self.print_map()
         
-        if self.number_of_moves % 1 == 0:
-            #print(self.number_of_moves, self.current_state, self.golds_found)
-            pass
 
         self.UpdateGoldTimeout()
         self.number_of_moves += 1
