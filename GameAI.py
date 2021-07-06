@@ -121,11 +121,11 @@ class GameAI():
     max_avoid_hole_ticks = 3    # standard = 8
     max_exploration_ticks = 500   # standard = 300 - 500
     max_gold_search_ticks = 55      # standard = 55
-    max_unstuck_ticks = 30      #standard = 20      
+    max_unstuck_ticks = 40      #standard = 30      
     min_golds_to_start_seaching = 3
     thread_sleep = 200      # somente usado para o calculo abaixo
     item_spawn_interval = int((1000/thread_sleep) * 15)
-    max_consecutive_missed_shots = 8
+    max_consecutive_missed_shots = 10
 
     current_observations = {
                             "blocked": False,
@@ -600,7 +600,7 @@ class GameAI():
 
     def GetTimeDeltaGoldBeingSearched(self):
         """ Função auxiliar. Retorna há quantos passos ouro atual está sendo procurado"""
-        print(f"sendo procurado há {self.number_of_moves - self.GetTimeGoldPositionBeingSearched()}")
+        #print(f"sendo procurado há {self.number_of_moves - self.GetTimeGoldPositionBeingSearched()}")
         return self.number_of_moves - self.GetTimeGoldPositionBeingSearched()
 
 
@@ -1088,7 +1088,8 @@ class GameAI():
         #     self.print_map()
         
         if self.number_of_moves % 1 == 0:
-            print(self.number_of_moves, self.current_state, self.golds_found)
+            #print(self.number_of_moves, self.current_state, self.golds_found)
+            pass
 
         self.UpdateGoldTimeout()
         self.number_of_moves += 1
