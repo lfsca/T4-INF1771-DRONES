@@ -306,13 +306,13 @@ class Bot():
         elif decision ==  "atacar":
             self.client.sendShoot()
         elif decision ==  "pegar_ouro":
-            self.sendMsg("TAMBEM SEM DINHEIROOO!!!")
+            #self.sendMsg("TAMBEM SEM DINHEIROOO!!!")
             self.client.sendGetItem()
         elif decision == "pegar_anel":
-            self.sendMsg("TAMBEM SEM DINHEIROOO!!!")
+            #self.sendMsg("TAMBEM SEM DINHEIROOO!!!")
             self.client.sendGetItem()
         elif decision == "pegar_powerup":
-            self.sendMsg("AMAVA A PRINCESAAAA!!!")
+            #self.sendMsg("AMAVA A PRINCESAAAA!!!")
             self.client.sendGetItem()
         elif decision ==  "andar_re":
             self.client.sendBackward()
@@ -329,7 +329,8 @@ class Bot():
         if self.gameStatus == "Game":
             self.DoDecision()
             if self.msgSeconds == 5000:
-                self.sendMsg("UM CONTO DE FADAAAAAAS!!!")
+                #self.sendMsg("UM CONTO DE FADAAAAAAS!!!")
+                pass
 
                     
 

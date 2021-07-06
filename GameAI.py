@@ -22,6 +22,7 @@ __email__ = "abaffa@inf.puc-rio.br"
 # Integrantes: Bruno Coutinho, Henrique Peres e Luiz Fellipe Augusto
 #
 
+from datetime import time
 import random
 from Map.Position import Position
 from queue import PriorityQueue
@@ -128,6 +129,9 @@ class GameAI():
                             "hit": False,
                             "enemy_in_front": False
     }
+
+    gold_position_being_searched = {"position": None, "start_time": None}
+    timed_out_gold_positions = {}
 
     # inicializa mapa com todas posições "#", indicando desconhecido.
     map = [["#"] * 34 for _ in range(59)]
@@ -248,13 +252,13 @@ class GameAI():
 
         ret = []
 
-        if self.CheckNotWall(self.player.x - 1, self.player.y):
+        if self.CheckNotOutOfBounds(self.player.x - 1, self.player.y):
             ret.append(Position(self.player.x - 1, self.player.y))
-        if self.CheckNotWall(self.player.x + 1, self.player.y):
+        if self.CheckNotOutOfBounds(self.player.x + 1, self.player.y):
             ret.append(Position(self.player.x + 1, self.player.y))
-        if self.CheckNotWall(self.player.x, self.player.y - 1):
+        if self.CheckNotOutOfBounds(self.player.x, self.player.y - 1):
             ret.append(Position(self.player.x, self.player.y - 1))
-        if self.CheckNotWall(self.player.x, self.player.y + 1):
+        if self.CheckNotOutOfBounds(self.player.x, self.player.y + 1):
             ret.append(Position(self.player.x, self.player.y + 1))
 
         return ret
@@ -269,23 +273,23 @@ class GameAI():
 
         ret = []
 
-        if self.CheckNotWall(self.player.x - 1, self.player.y - 1):
+        if self.CheckNotOutOfBounds(self.player.x - 1, self.player.y - 1):
             ret.Add(Position(self.player.x - 1, self.player.y - 1))
-        if self.CheckNotWall(self.player.x, self.player.y - 1):
+        if self.CheckNotOutOfBounds(self.player.x, self.player.y - 1):
             ret.Add(Position(self.player.x, self.player.y - 1))
-        if self.CheckNotWall(self.player.x + 1, self.player.y - 1):
+        if self.CheckNotOutOfBounds(self.player.x + 1, self.player.y - 1):
             ret.Add(Position(self.player.x + 1, self.player.y - 1))
 
-        if self.CheckNotWall(self.player.x - 1, self.player.y):
+        if self.CheckNotOutOfBounds(self.player.x - 1, self.player.y):
             ret.Add(Position(self.player.x - 1, self.player.y))
-        if self.CheckNotWall(self.player.x + 1, self.player.y):
+        if self.CheckNotOutOfBounds(self.player.x + 1, self.player.y):
             ret.Add(Position(self.player.x + 1, self.player.y))
 
-        if self.CheckNotWall(self.player.x - 1, self.player.y + 1):
+        if self.CheckNotOutOfBounds(self.player.x - 1, self.player.y + 1):
             ret.Add(Position(self.player.x - 1, self.player.y + 1))
-        if self.CheckNotWall(self.player.x, self.player.y + 1):
+        if self.CheckNotOutOfBounds(self.player.x, self.player.y + 1):
             ret.Add(Position(self.player.x, self.player.y + 1))
-        if self.CheckNotWall(self.player.x + 1, self.player.y + 1):    
+        if self.CheckNotOutOfBounds(self.player.x + 1, self.player.y + 1):    
             ret.Add(Position(self.player.x + 1, self.player.y + 1))
 
         return ret
@@ -302,13 +306,13 @@ class GameAI():
 
         ret = None
 
-        if self.dir == "north" and self.CheckNotWall(self.player.x + 1, self.player.y):
+        if self.dir == "north" and self.CheckNotOutOfBounds(self.player.x + 1, self.player.y):
             ret = Position(self.player.x + 1, self.player.y)      
-        elif self.dir == "east" and self.CheckNotWall(self.player.x, self.player.y + 1):
+        elif self.dir == "east" and self.CheckNotOutOfBounds(self.player.x, self.player.y + 1):
                 ret = Position(self.player.x, self.player.y + 1)     
-        elif self.dir == "south" and self.CheckNotWall(self.player.x - 1, self.player.y):
+        elif self.dir == "south" and self.CheckNotOutOfBounds(self.player.x - 1, self.player.y):
                 ret = Position(self.player.x - 1, self.player.y)    
-        elif self.dir == "west" and self.CheckNotWall(self.player.x, self.player.y - 1):
+        elif self.dir == "west" and self.CheckNotOutOfBounds(self.player.x, self.player.y - 1):
                 ret = Position(self.player.x, self.player.y - 1)
 
         return ret
@@ -325,13 +329,13 @@ class GameAI():
 
         ret = None
 
-        if self.dir == "north" and self.CheckNotWall(self.player.x - 1, self.player.y):
+        if self.dir == "north" and self.CheckNotOutOfBounds(self.player.x - 1, self.player.y):
             ret = Position(self.player.x - 1, self.player.y)      
-        elif self.dir == "east" and self.CheckNotWall(self.player.x, self.player.y - 1):
+        elif self.dir == "east" and self.CheckNotOutOfBounds(self.player.x, self.player.y - 1):
                 ret = Position(self.player.x, self.player.y - 1)     
-        elif self.dir == "south" and self.CheckNotWall(self.player.x + 1, self.player.y):
+        elif self.dir == "south" and self.CheckNotOutOfBounds(self.player.x + 1, self.player.y):
                 ret = Position(self.player.x + 1, self.player.y)    
-        elif self.dir == "west" and self.CheckNotWall(self.player.x, self.player.y + 1):
+        elif self.dir == "west" and self.CheckNotOutOfBounds(self.player.x, self.player.y + 1):
                 ret = Position(self.player.x, self.player.y + 1)
 
         return ret
@@ -348,13 +352,13 @@ class GameAI():
 
         ret = None
 
-        if self.dir == "north" and self.CheckNotWall(self.player.x, self.player.y + 1):
+        if self.dir == "north" and self.CheckNotOutOfBounds(self.player.x, self.player.y + 1):
             ret = Position(self.player.x, self.player.y + 1)      
-        elif self.dir == "east" and self.CheckNotWall(self.player.x - 1, self.player.y):
+        elif self.dir == "east" and self.CheckNotOutOfBounds(self.player.x - 1, self.player.y):
                 ret = Position(self.player.x - 1, self.player.y)     
-        elif self.dir == "south" and self.CheckNotWall(self.player.x, self.player.y - 1):
+        elif self.dir == "south" and self.CheckNotOutOfBounds(self.player.x, self.player.y - 1):
                 ret = Position(self.player.x, self.player.y - 1)    
-        elif self.dir == "west" and self.CheckNotWall(self.player.x + 1, self.player.y):
+        elif self.dir == "west" and self.CheckNotOutOfBounds(self.player.x + 1, self.player.y):
                 ret = Position(self.player.x + 1, self.player.y)
 
         return ret
@@ -370,13 +374,13 @@ class GameAI():
 
         ret = None
         
-        if self.dir == "north" and self.CheckNotWall(self.player.x, self.player.y - 1):
+        if self.dir == "north" and self.CheckNotOutOfBounds(self.player.x, self.player.y - 1):
             ret = Position(self.player.x, self.player.y - 1)      
-        elif self.dir == "east" and self.CheckNotWall(self.player.x + 1, self.player.y):
+        elif self.dir == "east" and self.CheckNotOutOfBounds(self.player.x + 1, self.player.y):
             ret = Position(self.player.x + 1, self.player.y)     
-        elif self.dir == "south" and self.CheckNotWall(self.player.x, self.player.y + 1):
+        elif self.dir == "south" and self.CheckNotOutOfBounds(self.player.x, self.player.y + 1):
             ret = Position(self.player.x, self.player.y + 1)    
-        elif self.dir == "west" and self.CheckNotWall(self.player.x - 1, self.player.y):
+        elif self.dir == "west" and self.CheckNotOutOfBounds(self.player.x - 1, self.player.y):
             ret = Position(self.player.x - 1, self.player.y)
 
         return ret
@@ -386,12 +390,26 @@ class GameAI():
         """ Função auxiliar. Retorna posição atual do jogador
         
         Returns: objeto player, da classe Position
-
         """
         return self.player
 
 
-    def CheckNotWall(self,x,y):
+    def GetCharPosition(self, pos):
+        """ Função auxiliar. Dada uma posição, retorna tipo (o char) dela marcado no mapa
+        
+        Args:
+            pos: objeto da classe position
+        Returns:
+            string com tipo
+            None se posição tiver fora do mapa
+        """
+
+        if self.CheckNotOutOfBounds(pos.x, pos.y):
+            return self.map[pos.x][pos.y]
+        return None
+
+
+    def CheckNotOutOfBounds(self,x,y):
         """ Função auxiliar. Verifica se pos. fornecida não está fora do mapa
         
             Args:
@@ -408,6 +426,7 @@ class GameAI():
 
     def print_map(self):
         """ Função auxiliar. Printa mapa no terminal"""
+
         for a in range(34):
             for b in self.map:
                 print (b[a], end = "")
@@ -415,32 +434,86 @@ class GameAI():
         print("")
 
 
-    def manhattan(self, x1, y1, x2, y2):
-        """ Função auxiliar. Retorna dist de manhattan entre dois pontos.
-        """
-        return abs(x1 - x2) + abs(y1 - y2)
+    def manhattan(self, pos1, pos2):
+        """ Função auxiliar. Retorna dist de manhattan entre dois pontos."""
 
+        return abs(pos1.x - pos2.x) + abs(pos1.y - pos2.y)
+    
+
+    def AddTimedOutGoldPosition(self, pos):
+        """ Função auxiliar. Adiciona pos à lista de posições de """
+        self.timed_out_gold_positions[pos.x, pos.y] = self.number_of_moves
+
+
+    def IsGoldPositionTimedOut(self, pos):
+        """ Função auxiliar"""
+
+        if (pos.x, pos.y) in self.timed_out_gold_positions:
+            time = self.timed_out_gold_positions[pos.x, pos.y]
+            if self.number_of_moves - time <= 150:
+                return True
+        return False
+
+    # TODO: implementar um check em algum lugar pra, se passar por cima de uma posição marcada com "T"
+    # e não tiver ouro no momento (ou seja, não spawnou ainda), guarda em uma variável que esse ouro
+    # está indisponível no momento. Após 15 segundos (== 150 passos), marcar ouro como disponível
     def find_nearest_gold(self):
-        """ Função auxiliar. Retorna posição (no formato de lista [x,y]) do ouro mais próximo do bot.
+        """ Função auxiliar. Retorna posição (no formato objeto Position) do ouro mais próximo do bot.
 
-        Não está sendo usado na moral, fiz mais pra testar se funcionava isso. Pode ser meio um precursor
-        do a*
+        Returns:
+            Objeto position com posição do ouro mais próximo de onde o bot está no momento
+            None se não tiver nenhum ouro descoberto ainda
         """
+        
         golds_positions = []
         for y in range(34):
             for x in range(59):
                 if self.map[x][y] == "T":
                     golds_positions.append([x,y])
+    
         nearest_gold = None
         min_distance = 1000000
-        current_x = self.GetPlayerPosition().x
-        current_y = self.GetPlayerPosition().y
+        current_position = self.GetPlayerPosition()
         for gold_position in golds_positions:
-            dist_to_gold = self.manhattan(gold_position[0], gold_position[1], current_x, current_y)
-            if  dist_to_gold < min_distance:
+            gold_position = Position(gold_position[0], gold_position[1])
+            dist_to_gold = self.manhattan(gold_position, current_position)
+            if dist_to_gold < min_distance and not self.IsGoldPositionTimedOut(gold_position):
                 nearest_gold = gold_position
                 min_distance = dist_to_gold
+       
         return nearest_gold
+
+
+    def find_second_nearest_gold():
+        pass
+
+    def find_appropriate_gold(self):
+        if self.gold_position_being_searched["start_time"]:
+            if self.number_of_moves - self.gold_position_being_searched["start_time"] >= 50:
+                nearest_gold = self.find_second_nearest_gold()
+                self.gold_position_being_searched["start_time"] = self.number_of_moves
+                self.gold_position_being_searched["position"] = nearest_gold
+            else:
+                nearest_gold = self.find_nearest_gold()
+                if self.gold_position_being_searched["position"] != nearest_gold:
+                    self.gold_position_being_searched["start_time"] = self.number_of_moves
+                    self.gold_position_being_searched["position"] = nearest_gold
+        else:
+            nearest_gold = self.find_nearest_gold()
+            if self.gold_position_being_searched["position"] != nearest_gold:
+                self.gold_position_being_searched["start_time"] = self.number_of_moves
+                self.gold_position_being_searched["position"] = nearest_gold
+        return nearest_gold
+
+    
+    def SetTimedOutGoldPositionNow(self, position):
+        """ Função auxiliar"""
+        
+
+    def EraseTimedOutGoldPosition(self, position):
+        """ Função auxiliar"""
+
+        self.timed_out_gold_positions[(position.x, position.y)] = 1000000
 
 
     ###########################################################################
@@ -514,15 +587,79 @@ class GameAI():
 
 
     def StateSearchGold(self):
-        # TODO: implementar isso na moral, usando a* para chegar no ouro mais próximo
-        print(self.find_nearest_gold())
-        n = random.randint(0,7)
-        if n == 0:
-            self.current_action = "virar_direita"
-        elif n == 1:
-            self.current_action = "virar_esquerda"
-        else:
+        nearest_gold = self.find_appropriate_gold()
+        current_position = self.GetPlayerPosition()
+        dist_to_gold_now = self.manhattan(current_position, nearest_gold)
+        forward_position = self.GetPositionForward()
+
+        # se andar pra frente te deixa mais perto do ouro mais próximo, anda pra frente
+        if forward_position:
+            dist_to_gold_going_forward = self.manhattan(nearest_gold, forward_position)
+            forward_position_char = self.GetCharPosition(forward_position)
+            if dist_to_gold_going_forward < dist_to_gold_now and forward_position_char != "W":
+                self.current_action = "andar"
+                return
+        
+        turning_left_position = self.GetPositionTurningLeft()
+        if turning_left_position:
+            turning_left_position_char = self.GetCharPosition(turning_left_position)
+        turning_right_position = self.GetPositionTurningRight()
+        if turning_right_position:
+            turning_right_position_char = self.GetCharPosition(turning_right_position)
+        backwards_position = self.GetPositionBehind()
+        if backwards_position:
+            backwards_position_char = self.GetCharPosition(backwards_position)
+
+        if turning_left_position:
+            dist_to_gold_going_left = self.manhattan(nearest_gold, turning_left_position)
+            if dist_to_gold_going_left < dist_to_gold_now and turning_left_position_char != "W":
+                self.current_action = "virar_esquerda"
+                return
+        
+        if turning_right_position:
+            dist_to_gold_going_right = self.manhattan(nearest_gold, turning_right_position)
+            if dist_to_gold_going_right < dist_to_gold_now and turning_right_position_char != "W":
+                self.current_action = "virar_direita"
+                return
+        
+        if backwards_position:
+            dist_to_gold_going_backwards = self.manhattan(nearest_gold, backwards_position)
+            if dist_to_gold_going_backwards < dist_to_gold_now and backwards_position_char != "W":
+                self.current_action = "andar_re"
+                return
+        
+        ######
+
+        if forward_position:
+            if dist_to_gold_going_forward == dist_to_gold_now and forward_position_char != "W":
+                self.current_action = "andar"
+                return
+        
+        if turning_left_position:
+            if dist_to_gold_going_left == dist_to_gold_now and turning_left_position_char != "W":
+                self.current_action = "virar_esquerda"
+                return
+        
+        if turning_right_position:
+            if dist_to_gold_going_right == dist_to_gold_now and turning_right_position_char != "W":
+                self.current_action = "virar_direita"
+                return
+        
+        if backwards_position:
+            if dist_to_gold_going_backwards == dist_to_gold_now and backwards_position_char != "W":
+                self.current_action = "andar_re"
+                return
+        
+        ####
+
+        if forward_position and forward_position_char != "W":
             self.current_action = "andar"
+        elif turning_left_position and turning_left_position_char != "W":
+            self.current_action = "virar_esquerda"
+        elif turning_right_position and turning_right_position_char != "W":
+            self.current_action = "virar_direita"
+        else:
+            self.current_action = "andar_re"
 
 
     def StateRandomExplore(self):
@@ -537,13 +674,13 @@ class GameAI():
         
         forward_position = self.GetPositionForward()
         if forward_position:
-            forward_position_char = self.map[forward_position.x][forward_position.y]
+            forward_position_char = self.GetCharPosition(forward_position)
         turning_left_position = self.GetPositionTurningLeft()
         if turning_left_position:
-            turning_left_position_char = self.map[turning_left_position.x][turning_left_position.y]
+            turning_left_position_char = self.GetCharPosition(turning_left_position)
         turning_right_position = self.GetPositionTurningRight()
         if turning_right_position:
-            turning_right_position_char = self.map[turning_right_position.x][turning_right_position.y]
+            turning_right_position_char = self.GetCharPosition(turning_right_position)
         
         random_decider = random.randint(0,1)
         if forward_position and forward_position_char == "?":
@@ -589,6 +726,15 @@ class GameAI():
     ###########################################################################
 
 
+    def UpdateGoldTimeout(self):
+        posicao_player = self.GetPlayerPosition()
+        if self.map[posicao_player.x][posicao_player.y] != "T":
+            self.SetTimedOutGoldPositionNow(posicao_player)
+        for pos, time in self.timed_out_gold_positions.items():
+            if not self.IsGoldPositionTimedOut(Position(pos[0], pos[1])):
+                self.EraseTimedOutGoldPosition(Position(pos[0], pos[1]))
+
+
     def UpdateMap(self):
         """ Atualiza o mapa a cada jogada com as informações disponíveis no momento.
         """
@@ -596,10 +742,15 @@ class GameAI():
         posicao_player = self.GetPlayerPosition()
 
         if self.current_observations["blueLight"]:
-            self.map[posicao_player.x][posicao_player.y] = "T"
+            self.SetTimedOutGoldPositionNow(posicao_player)
+            if self.map[posicao_player.x][posicao_player.y] != "T":
+                self.golds_found += 1
+                self.map[posicao_player.x][posicao_player.y] = "T"
         
         elif self.current_observations["redLight"]:
-            self.map[posicao_player.x][posicao_player.y] = "L"
+            if self.map[posicao_player.x][posicao_player.y] != "L":
+                self.powerups_found += 1
+                self.map[posicao_player.x][posicao_player.y] = "L"
         
         if self.current_observations["breeze"] or self.current_observations["flash"]:
             for adjacent_position in self.GetObservableAdjacentPositions():
@@ -678,7 +829,7 @@ class GameAI():
 
         # se ainda tiver no começo do jogo e não tiver caído em nenhuma das condições
         # anteriores, sai explorando
-        elif self.number_of_moves <= self.max_exploration_ticks:
+        elif self.number_of_moves <= self.max_exploration_ticks or self.golds_found <= 2:
             self.current_state = "random_explore"
             self.StateRandomExplore()
 
