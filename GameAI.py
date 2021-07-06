@@ -1,26 +1,13 @@
 ﻿#!/usr/bin/env python
 
 """GameAI.py: INF1771 GameAI File - Where Decisions are made."""
-#############################################################
-#Copyright 2020 Augusto Baffa
-#
-#Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-#
-#The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-#
-#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
-#############################################################
-__author__      = "Augusto Baffa"
-__copyright__   = "Copyright 2020, Rio de janeiro, Brazil"
-__license__ = "GPL"
-__version__ = "1.0.0"
-__email__ = "abaffa@inf.puc-rio.br"
-#############################################################
+####################################################################
 #
 # Grupo: Nattanzinho Carpinteiro: Movidos pela paixão
 # Integrantes: Bruno Coutinho, Henrique Peres e Luiz Fellipe Augusto
 #
+####################################################################
+
 
 from datetime import time
 import random
@@ -113,10 +100,16 @@ class GameAI():
 
     escape_ticks = 0
     avoid_hole_ticks = 0
+    get_unstuck_ticks = 0
 
-    max_escape_ticks = 8
-    max_avoid_hole_ticks = 3
-    max_exploration_ticks = 500
+    max_escape_ticks = 8        # standard = 8
+    max_avoid_hole_ticks = 3    # standard = 8
+    max_exploration_ticks = 500   # standard = 300 - 500
+    max_gold_search_ticks = 55      # standard = 55
+    max_get_unstuck_ticks = 15      #standard = 15      
+    min_golds_to_start_seaching = 2
+    thread_sleep = 200      # somente usado para o calculo abaixo
+    item_spawn_interval = int((1000/thread_sleep) * 15)
 
     current_observations = {
                             "blocked": False,
@@ -133,7 +126,6 @@ class GameAI():
     gold_position_being_searched = {"position": None, "start_time": None}
     timed_out_gold_positions = {}
 
-    # inicializa mapa com todas posições "#", indicando desconhecido.
     map = [["#"] * 34 for _ in range(59)]
 
 
@@ -164,16 +156,6 @@ class GameAI():
         self.score = score
         self.energy = energy
 
-
-    # <summary>
-    # Set player position
-    # </summary>
-    # <param name="x">x position</param>
-    # <param name="y">y position</param>
-    def SetPlayerPosition(self, x, y):
-        """ NÃO USAR ESTA FUNÇÃO!!! Não é por aqui que muda a posição de verdade"""
-        self.player.x = x
-        self.player.y = y
 
 
     def GetObservations(self, o):
@@ -384,7 +366,20 @@ class GameAI():
             ret = Position(self.player.x - 1, self.player.y)
 
         return ret
-    
+
+
+    def IsPositionForwardSafe(self):
+        position_forward = self.GetPositionForward()
+        if position_forward:
+            return self.GetCharPosition(position_forward) != "!"
+
+
+    def IsPositionBehindSafe(self):
+        position_behind = self.GetPositionBehind()
+        if position_behind:
+            return self.GetCharPosition(position_behind) != "!"
+        return True
+
 
     def GetPlayerPosition(self):
         """ Função auxiliar. Retorna posição atual do jogador
@@ -437,27 +432,71 @@ class GameAI():
     def manhattan(self, pos1, pos2):
         """ Função auxiliar. Retorna dist de manhattan entre dois pontos."""
 
-        return abs(pos1.x - pos2.x) + abs(pos1.y - pos2.y)
+        if self.CheckNotOutOfBounds(pos1.x, pos1.y) and self.CheckNotOutOfBounds(pos2.x, pos2.y):
+            return abs(pos1.x - pos2.x) + abs(pos1.y - pos2.y)
+        return None
     
 
-    def AddTimedOutGoldPosition(self, pos):
-        """ Função auxiliar. Adiciona pos à lista de posições de """
+    def SetTimedOutGoldPosition(self, pos):
+        """ Função auxiliar. Adiciona pos e tempo atual ao dicionario de posicoes de ouro sem ouro no momento"""
+
         self.timed_out_gold_positions[pos.x, pos.y] = self.number_of_moves
 
 
+
     def IsGoldPositionTimedOut(self, pos):
-        """ Função auxiliar"""
+        """ Função auxiliar. Retorna true se pos spawna ouro mas no momento não tem"""
 
         if (pos.x, pos.y) in self.timed_out_gold_positions:
             time = self.timed_out_gold_positions[pos.x, pos.y]
-            if self.number_of_moves - time <= 150:
+            if self.number_of_moves - time <= self.item_spawn_interval:
+                return True
+        return False
+    
+
+    def EraseTimedOutGoldPosition(self, position):
+        """ Função auxiliar. "Tira" posição dada do dicionario de posicoes de ouro sem ouro no momento"""
+
+        self.timed_out_gold_positions[(position.x, position.y)] = -1000000
+
+
+    def GetAllGoldsPositions(self):
+        """Função auxiliar. Retorna lista com posições (no formato objeto Position) de todos ouros encontrados"""
+
+        golds_positions = []
+        for y in range(34):
+            for x in range(59):
+                if self.map[x][y] == "T":
+                    golds_positions.append(Position(x,y))
+        return golds_positions
+
+
+    def GetGoldPositionBeingSearched(self):
+        return self.gold_position_being_searched["position"]
+
+   
+    def GetTimeGoldPositionBeingSearched(self):
+        return self.gold_position_being_searched["start_time"]
+
+
+    def EraseTimeGoldPositionBeingSearched(self):
+        self.gold_position_being_searched["start_time"] = self.number_of_moves + self.max_get_unstuck_ticks
+
+
+    def SetGoldPositionBeingSearched(self, pos):
+        self.gold_position_being_searched["position"] = pos
+        self.gold_position_being_searched["start_time"] = self.number_of_moves
+
+   
+    def EqualPositions(self, pos1, pos2):
+        """ Returns true if two positions are equal"""
+        if pos1 and pos2:
+            if pos1.x == pos2.x and pos1.y == pos2.y:
                 return True
         return False
 
-    # TODO: implementar um check em algum lugar pra, se passar por cima de uma posição marcada com "T"
-    # e não tiver ouro no momento (ou seja, não spawnou ainda), guarda em uma variável que esse ouro
-    # está indisponível no momento. Após 15 segundos (== 150 passos), marcar ouro como disponível
-    def find_nearest_gold(self):
+
+    def FindNearestGold(self):
         """ Função auxiliar. Retorna posição (no formato objeto Position) do ouro mais próximo do bot.
 
         Returns:
@@ -465,56 +504,33 @@ class GameAI():
             None se não tiver nenhum ouro descoberto ainda
         """
         
-        golds_positions = []
-        for y in range(34):
-            for x in range(59):
-                if self.map[x][y] == "T":
-                    golds_positions.append([x,y])
-    
+        golds_positions = self.GetAllGoldsPositions()
+       
         nearest_gold = None
         min_distance = 1000000
         current_position = self.GetPlayerPosition()
         for gold_position in golds_positions:
-            gold_position = Position(gold_position[0], gold_position[1])
             dist_to_gold = self.manhattan(gold_position, current_position)
             if dist_to_gold < min_distance and not self.IsGoldPositionTimedOut(gold_position):
                 nearest_gold = gold_position
                 min_distance = dist_to_gold
-       
+        if not self.EqualPositions(nearest_gold, self.GetGoldPositionBeingSearched()):
+            self.SetGoldPositionBeingSearched(nearest_gold)
         return nearest_gold
 
 
-    def find_second_nearest_gold(self):
-        return Position(25,17)
+    def IsAnyAvailableGold(self):
+        all_golds_positions = self.GetAllGoldsPositions()
+        for gold_position in all_golds_positions:
+            if not self.IsGoldPositionTimedOut(gold_position):
+                return True
+        return False
 
 
-    def find_appropriate_gold(self):
-        if self.gold_position_being_searched["start_time"]:
-            if self.number_of_moves - self.gold_position_being_searched["start_time"] >= 50:
-                nearest_gold = self.find_second_nearest_gold()
-                self.gold_position_being_searched["start_time"] = self.number_of_moves
-                self.gold_position_being_searched["position"] = nearest_gold
-            else:
-                nearest_gold = self.find_nearest_gold()
-                if self.gold_position_being_searched["position"] != nearest_gold:
-                    self.gold_position_being_searched["start_time"] = self.number_of_moves
-                    self.gold_position_being_searched["position"] = nearest_gold
-        else:
-            nearest_gold = self.find_nearest_gold()
-            if self.gold_position_being_searched["position"] != nearest_gold:
-                self.gold_position_being_searched["start_time"] = self.number_of_moves
-                self.gold_position_being_searched["position"] = nearest_gold
-        return nearest_gold
-
-    
-    def SetTimedOutGoldPositionNow(self, position):
-        """ Função auxiliar"""
-        
-
-    def EraseTimedOutGoldPosition(self, position):
-        """ Função auxiliar"""
-
-        self.timed_out_gold_positions[(position.x, position.y)] = 1000000
+    def GetTimeDeltaGoldBeingSearched(self):
+        """ Função auxiliar. Retorna há quantos passos ouro atual está sendo procurado"""
+        print(f"sendo procurado há {self.number_of_moves - self.GetTimeGoldPositionBeingSearched()}")
+        return self.number_of_moves - self.GetTimeGoldPositionBeingSearched()
 
 
     ###########################################################################
@@ -532,37 +548,6 @@ class GameAI():
 
     def StateEscape(self):
 
-        # esse jeito que tava sendo feito tava bugando a posição do jogador,
-        # porque a gnt não pode usar o setPlayerPosition nem o setPlayerDirection
-        # pra mudar a posição do jogador. Isso tem que ser feito uma ação por
-        # vez, usando o self.current_action = <ação>. Comentei em volta dele e
-        # coloquei uma função random pra poder testar outras coisas.
-
-        # pos = self.GetPlayerPosition()
-
-        # if self.dir == "north":
-        #     self.SetPlayerDirection("west")
-        #     self.current_action = "virar_esquerda"
-        #     self.SetPlayerPosition(pos.x - 1, pos.y)
-        #     self.current_action = "andar"
-                
-        # elif self.dir == "east":
-        #     self.SetPlayerDirection("south")
-        #     self.current_action = "virar_esquerda"
-        #     self.SetPlayerPosition(pos.x, pos.y + 1)
-        #     self.current_action = "andar"
-                
-        # elif self.dir == "south":
-        #     self.SetPlayerDirection("east")
-        #     self.current_action = "virar_esquerda"
-        #     self.SetPlayerPosition(pos.x + 1, pos.y)
-        #     self.current_action = "andar"
-                
-        # elif self.dir == "west":
-        #     self.SetPlayerDirection("north")
-        #     self.current_action = "virar_esquerda"
-        #     self.SetPlayerPosition(pos.x, pos.y - 1)
-        #     self.current_action = "andar"
         n = random.randint(0,7)
         if n == 0:
             self.current_action = "virar_direita"
@@ -588,7 +573,7 @@ class GameAI():
 
 
     def StateSearchGold(self):
-        nearest_gold = self.find_appropriate_gold()
+        nearest_gold = self.FindNearestGold()
         current_position = self.GetPlayerPosition()
         dist_to_gold_now = self.manhattan(current_position, nearest_gold)
         forward_position = self.GetPositionForward()
@@ -720,17 +705,26 @@ class GameAI():
             self.current_action = "andar"
 
 
+    def StateGetUnstuck(self):
+        n = random.randint(0,7)
+        if n == 0:
+            self.current_action = "virar_direita"
+        elif n == 1:
+            self.current_action = "virar_esquerda"
+        else:
+            self.current_action = "andar"
+
     ###########################################################################
     #
-    # Funções principais
+    # Funções principais, chamadas a cada thread_interval
     #
     ###########################################################################
 
 
     def UpdateGoldTimeout(self):
         posicao_player = self.GetPlayerPosition()
-        if self.map[posicao_player.x][posicao_player.y] != "T":
-            self.SetTimedOutGoldPositionNow(posicao_player)
+        if self.GetCharPosition(posicao_player) == "T":
+            self.SetTimedOutGoldPosition(posicao_player)
         for pos, time in self.timed_out_gold_positions.items():
             if not self.IsGoldPositionTimedOut(Position(pos[0], pos[1])):
                 self.EraseTimedOutGoldPosition(Position(pos[0], pos[1]))
@@ -743,7 +737,7 @@ class GameAI():
         posicao_player = self.GetPlayerPosition()
 
         if self.current_observations["blueLight"]:
-            self.SetTimedOutGoldPositionNow(posicao_player)
+            self.SetTimedOutGoldPosition(posicao_player)
             if self.map[posicao_player.x][posicao_player.y] != "T":
                 self.golds_found += 1
                 self.map[posicao_player.x][posicao_player.y] = "T"
@@ -785,7 +779,7 @@ class GameAI():
             self.StateGrab()
 
         # analogamente, se passar por cima de poção e n tiver com vida cheia, acho que vale tb
-        elif self.current_observations["redLight"] and self.energy < 80:
+        elif self.current_observations["redLight"] and self.energy < 100:
             self.current_state = "grab"
             self.StateGrab()
 
@@ -796,6 +790,8 @@ class GameAI():
             self.StateAvoidHole()
 
         # se sentiu cheirinho de buraco ou tp, entra no estado de desviar dele
+        #elif ((self.current_observations["breeze"] or self.current_observations["flash"]) and
+              #not (self.IsPositionBehindSafe() and self.IsPositionForwardSafe())):
         elif self.current_observations["breeze"] or self.current_observations["flash"]:
             self.current_state = "avoid_hole"
             self.avoid_hole_ticks = 0
@@ -830,15 +826,31 @@ class GameAI():
 
         # se ainda tiver no começo do jogo e não tiver caído em nenhuma das condições
         # anteriores, sai explorando
-        elif self.number_of_moves <= self.max_exploration_ticks or self.golds_found <= 2:
+        elif self.number_of_moves <= self.max_exploration_ticks or self.golds_found < self.min_golds_to_start_seaching:
             self.current_state = "random_explore"
             self.StateRandomExplore()
 
+        elif (self.past_state == "search_gold" and self.GetTimeDeltaGoldBeingSearched() >= self.max_gold_search_ticks):
+              self.current_state = "get_unstuck"
+              self.get_unstuck_ticks = 0
+              self.EraseTimeGoldPositionBeingSearched()
+              self.StateGetUnstuck()
+        
+        elif self.past_state == "get_unstuck" and self.get_unstuck_ticks <= self.max_get_unstuck_ticks:
+            self.current_state = "get_unstuck"
+            self.get_unstuck_ticks += 1
+            self.StateGetUnstuck()
+
         # se não tiver mais no começo do jogo e não tiver caído em nenhuma das condições
         # anteriores, tenta achar ouro
-        else:
+        elif self.IsAnyAvailableGold():
             self.current_state = "search_gold"
             self.StateSearchGold()
+        
+        else:
+            self.current_state = "random_explore"
+            self.StateRandomExplore()
+
 
 
     def GetDecision(self):
@@ -850,82 +862,13 @@ class GameAI():
         # if self.number_of_moves % 200 == 0:
         #     self.print_map()
         
+        if self.number_of_moves % 1 == 0:
+            print(self.number_of_moves, self.current_state, self.golds_found)
+
+        self.UpdateGoldTimeout()
         self.number_of_moves += 1
         self.UpdateMap()
         self.past_state = self.current_state
         self.DecideState()
 
         return self.current_action
-
-
-    # TODO: só copiei e colei o a* igualzinho ao do T1, acho q deve ter bastante coisa pra
-    # adaptar. A ideia é usar ele pra encontrar o melhor caminho até uma posição p (em geral
-    # é uma posição onde a gente já sabe que tem ouro ou então powerup)
-
-    def a_estrela(self):
-        """
-        Implementação do A*, atualiza a parte gráfica ao longo da execução.
-        """
-
-        # para cada posição p, gScore[p] é o custo do caminho da posicao inicial até p
-        gScore = dict()
-        # para cada posição p, count_ginasios_passados[p] é o número de ginásios passados até chegar em p
-        count_ginasios_passados = dict()
-        # para cada posição p, pos_anterior[p] é a posição precedente no mais caminho mais curto da origem
-        pos_anterior = dict()
-        # para cada posição p, se blocos_passados[p] então p nao sera mais visitado
-        blocos_passados = dict()
-        # fila ordenada pelo menor f(n). Cada elemento é da forma (f(n), (x_pos, y_pos))
-        posicoes_em_aberto = PriorityQueue()
-
-        for pos, _ in self.campo:
-            gScore[pos] = 10000000
-            pos_anterior[pos] = None
-            count_ginasios_passados[pos] = 0
-        gScore[self.campo.inicio] = 0
-        fScore_inicio = 0 + self.campo.distancia(self.campo.inicio, self.campo.fim, 'manhattan')
-        posicoes_em_aberto.put((fScore_inicio, self.campo.inicio))
-        
-        while not posicoes_em_aberto.empty():
-            self.desenha_campo()                                            # parte grafica
-            self.wait(5)                                                    # parte grafica
-
-            # pega a posicao com o menor fscore no momento
-            pos_atual = posicoes_em_aberto.get()[1]
-            blocos_passados[pos_atual] = True
-            
-            self.atualiza_bloco(pos_atual, 'verificado')                    # parte grafica
-            self.custo_total_atual = gScore[pos_atual]                      # parte grafica
-            self.ginasios_passados = count_ginasios_passados[pos_atual]     # parte grafica
-
-            if self.campo.get_bloco(pos_atual) == 'F':
-                while pos_atual is not None:
-                    self.atualiza_bloco(pos_atual, 'caminho')               # parte grafica
-                    pos_atual = pos_anterior[pos_atual]
-                self.desenha_campo()                                        # parte grafica
-                return
-            
-            elif self.campo.get_bloco(pos_atual) == 'B':
-                count_ginasios_passados[pos_atual] += 1
-            
-            for vizinho in self.campo.get_vizinhos(pos_atual):
-                if vizinho in blocos_passados:
-                    continue
-                self.atualiza_bloco(vizinho, 'verificar')                   # parte grafica
-                
-                tipo = self.campo.get_bloco(vizinho)
-                if tipo == 'B':
-                    custo = self.lista_custos[count_ginasios_passados[pos_atual] + 1 - 1]  # -1 pois a lista comeca em 0
-                    if custo is None:
-                        custo = 10000  # ginasio nulo, que nao da para passar
-                else:
-                    custo = self.campo.CUSTO[tipo]
-                
-                possivel_novo_gScore = gScore[pos_atual] + custo
-                if possivel_novo_gScore < gScore[vizinho]:
-                    pos_anterior[vizinho] = pos_atual
-                    gScore[vizinho] = possivel_novo_gScore
-                    fScore = gScore[vizinho] + self.campo.distancia(vizinho, self.campo.fim, 'manhattan')
-                    posicoes_em_aberto.put((fScore, vizinho))
-                    count_ginasios_passados[vizinho] = count_ginasios_passados[pos_atual]
-        return
